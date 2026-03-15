@@ -1,0 +1,30 @@
+{
+  "name": "synaptic-saas",
+  "version": "0.1.0",
+  "description": "SYNAPTIC SaaS — Cloud-native AI orchestration platform with BYOK (Bring Your Own Key) model",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "echo 'TODO: Configure dev server'",
+    "build": "echo 'TODO: Configure build'",
+    "test": "echo 'TODO: Configure tests'",
+    "lint": "echo 'TODO: Configure linting'"
+  },
+  "keywords": [
+    "synaptic",
+    "saas",
+    "byok",
+    "ai-orchestration",
+    "llm",
+    "multi-provider"
+  ],
+  "author": "GoLab Architecture",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/golab-arch/SYNAPTIC_SAAS.git"
+  }
+}

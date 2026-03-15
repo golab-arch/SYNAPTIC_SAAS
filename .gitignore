@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.next/
+out/
+
+# Environment
+.env
+.env.local
+.env.production
+.env.*.local
+
+# API Keys — NEVER commit
+*.key
+*.pem
+credentials.json
+service-account.json
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Coverage
+coverage/
+
+# Temp
+.tmp/
+temp/
+
+# Firebase
+.firebase/
+firebase-debug.log
+
+# GCP
+.gcloud/
