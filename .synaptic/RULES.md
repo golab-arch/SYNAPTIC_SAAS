@@ -7,24 +7,22 @@
 ## 1. CODE QUALITY RULES
 
 ### 1.1 General Standards
-- All code must follow consistent formatting (Prettier)
+- All code must follow consistent formatting (Prettier enforced)
 - No commented-out code in production
 - Clear, descriptive variable and function names
 - Maximum function length: 50 lines
 - Maximum file length: 300 lines
-- TypeScript strict mode mandatory
+- TypeScript strict mode mandatory — no `any` without justification
 
 ### 1.2 Documentation
 - All public functions must have JSDoc/docstrings
 - README.md must be updated with each major feature
 - CHANGELOG must be maintained
-- API endpoints must be documented with OpenAPI/Swagger
 
 ### 1.3 Error Handling
 - All async operations must have error handling
 - User-facing errors must be clear and actionable
-- Log all errors with context (structured logging)
-- Never expose internal errors to end users
+- Log all errors with context (but NEVER log API keys or secrets)
 
 ---
 
@@ -33,28 +31,29 @@
 ### 2.1 Structure
 - Separation of concerns is mandatory
 - No circular dependencies allowed
-- Clear module boundaries between packages
-- Cloud-native patterns: stateless services, externalized config
+- Clear module boundaries
 
 ### 2.2 Dependencies
 - All dependencies must be justified
 - No duplicate functionality
-- Regular security audits required (npm audit)
-- Prefer well-maintained packages with active communities
+- Regular security audits required
 
-### 2.3 BYOK Security
-- API keys MUST be encrypted at rest (AES-256 minimum)
-- API keys MUST be encrypted in transit (TLS 1.3)
-- API keys MUST NEVER appear in logs
-- API keys MUST NEVER be stored in plaintext
-- API key validation must happen server-side only
-- Failed key validation must not reveal key content
+### 2.3 BYOK Security Rules
+- API keys encrypted AES-256-GCM at rest via GCP Secret Manager
+- TLS 1.3 mandatory for all key transmission
+- Keys NEVER appear in logs (application, server, or cloud logging)
+- Keys NEVER stored in plaintext — not in Firestore, not in env vars, not in memory longer than needed
+- Server-side validation only — keys never sent to frontend after initial submission
+- Key rotation: user-initiated, old key invalidated immediately
+- Failed validation attempts rate-limited (max 5/minute per user)
 
-### 2.4 Multi-Tenancy
-- All data access must be scoped by tenant/user
-- No shared state between tenants
-- Resource limits enforced per-tier
-- Workspace isolation is mandatory
+### 2.4 Multi-Tenancy Rules
+- All data scoped by `tenantId` — no cross-tenant data access
+- No shared mutable state between tenants
+- Resource limits enforced per pricing tier (cycles, projects, sandbox time)
+- Workspace isolation: each project has independent director files
+- Firestore security rules enforce tenant boundary at database level
+- Sandbox instances are per-session, never shared
 
 ---
 
@@ -62,7 +61,7 @@
 
 ### 3.1 Decision Gates
 - ALL architectural decisions require a Decision Gate
-- MINIMUM 3 options must be presented (A/B/C)
+- MINIMUM 3 options must be presented
 - NO implementation before user approval
 
 ### 3.2 Documentation Requirements
@@ -79,27 +78,30 @@
 
 ## 4. PROJECT-SPECIFIC RULES
 
-### Project: SYNAPTIC_SAAS
-### Description: Cloud SaaS platform for AI-assisted development with BYOK model
-
 ### 4.1 LLM Provider Rules
-- All providers must implement `ILLMProvider` interface
-- Provider-specific code must be isolated in adapter modules
-- Streaming must use SSE (Server-Sent Events)
-- Cost estimation must be provided before execution
-- Model fallback chain must be configurable per-user
+- ALL providers MUST implement the `ILLMProvider` interface — no exceptions
+- Provider-specific code isolated in adapter modules (`src/providers/<name>.ts`)
+- Streaming MUST use SSE (Server-Sent Events) — NOT WebSocket, NOT NDJSON
+- Cost estimation is mandatory before execution (`estimateCost()`)
+- Provider selection is user-driven (per-session), not hardcoded
+- Graceful degradation: if a provider doesn't support tool use, inform user — don't fail silently
+- No direct imports of provider SDKs outside adapter modules
 
 ### 4.2 Tool Execution Rules
-- All tool execution must happen inside sandboxed environments
-- No direct filesystem access on host
-- Sandbox timeout: 30 seconds per tool call
-- Sandbox memory limit: 512MB per session
+- ALL tool execution happens inside a sandbox (E2B or Docker) — no host filesystem access
+- No direct filesystem operations on the server host
+- Timeout: 30 seconds per tool call (configurable per tier)
+- Memory limit: 512MB per sandbox instance
+- Tool results must be sanitized before returning to LLM
+- Supported tools: Read, Write, Edit, Glob, Grep, Bash (sandboxed)
 
 ### 4.3 API Rules
-- All endpoints must require authentication
-- Rate limiting must be enforced per-tier
-- Request/response must be validated with Zod schemas
-- Versioned API (v1, v2...) from day one
+- ALL endpoints authenticated via Firebase Auth — except `GET /health`
+- Rate limiting enforced per pricing tier
+- Request validation with Zod schemas — no unvalidated input reaches business logic
+- API versioned from day 1 — all routes under `/v1/`
+- Response format: JSON with consistent error schema
+- SSE endpoints use proper `text/event-stream` content type
 
 ---
 
@@ -111,12 +113,22 @@
 
 ---
 
-## 6. REFERENCE: SYNAPTIC_EXPERT
+## 6. REFERENCE
 
-This project is derived from analysis of `SYNAPTIC_EXPERT` (local version).
-When in doubt about protocol implementation, consult:
-- `d:\GoLAB\PROYECTOS\SYNAPTIC_EXPERT\` — original codebase
-- `DG-120-SAAS-BYOK-FEASIBILITY-REPORT.md` in SYNAPTIC_EXPERT — founding analysis
+SYNAPTIC_EXPERT (`d:\GoLAB\PROYECTOS\SYNAPTIC_EXPERT\`) is the READ-ONLY reference repository.
+
+| What | Where in SYNAPTIC_EXPERT |
+|------|--------------------------|
+| Enforcement package | `packages/enforcement/` (standalone, 0 deps) |
+| Workspace package | `packages/workspace/` (standalone, 0 deps) |
+| System prompt builder | `packages/agent/src/agent.ts` lines 1710-2120 |
+| Enforcement wrapping | `packages/agent/src/agent.ts` lines 2228-2304 |
+| Multi-provider code | Branch `feature/cloud_byok` |
+| SAI audit system | `packages/agent/src/services/micro-audit.service.ts` |
+| Intelligence manager | `packages/agent/src/services/intelligence-manager.ts` |
+| Shared types | `packages/shared/src/types/` |
+
+**Rule**: NEVER modify SYNAPTIC_EXPERT from this project. Read-only consultation only.
 
 ---
 

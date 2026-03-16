@@ -51,7 +51,7 @@ Every Decision Gate MUST include:
 After each cycle completion:
 1. Update session state
 2. Log entry in BITACORA.md
-3. Update metrics
+3. Update session.json metrics
 4. Increment synaptic strength if successful
 
 ---
@@ -80,4 +80,4 @@ After each cycle completion:
 
 *SYNAPTIC Protocol v3.0 - Enforcement Active*
 *Mode: STRICT*
-*Generated: 2026-03-15*
+*Generated: 2026-03-15T23:56:12.514Z*

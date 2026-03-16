@@ -8,10 +8,16 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "dev": "echo 'TODO: Configure dev server'",
-    "build": "echo 'TODO: Configure build'",
-    "test": "echo 'TODO: Configure tests'",
-    "lint": "echo 'TODO: Configure linting'"
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "format": "prettier --write 'src/**/*.ts'",
+    "format:check": "prettier --check 'src/**/*.ts'",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "synaptic",
@@ -26,5 +32,19 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/golab-arch/SYNAPTIC_SAAS.git"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.4.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^4.1.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "fastify": "^5.0.0"
   }
 }
