@@ -1,6 +1,6 @@
 /**
  * AgentLoopService — the heart of SYNAPTIC_SAAS.
- * Orchestrates the 5 engines + LLM + tools in the 9-step execution flow.
+ * Orchestrates the 5 engines + LLM in the 9-step execution flow.
  * Contains NO business logic — only orchestration.
  */
 
@@ -10,17 +10,16 @@ import type { ISAIEngine, FileContent } from '../engines/sai/types.js';
 import type { IIntelligenceEngine, BitacoraCycleEntry } from '../engines/intelligence/types.js';
 import type { IGuidanceEngine } from '../engines/guidance/types.js';
 import type { IProtocolEngine } from '../engines/protocol/types.js';
-import type {
-  OrchestrationRequest,
-  SSEEvent,
-} from './types.js';
+import type { OrchestrationRequest, SSEEvent } from './types.js';
 
 export interface AgentLoopConfig {
   readonly maxRegenerationAttempts: number;
+  readonly decayStartCycle: number;
 }
 
 const DEFAULT_CONFIG: AgentLoopConfig = {
   maxRegenerationAttempts: 5,
+  decayStartCycle: 25,
 };
 
 export class AgentLoopService {
@@ -45,40 +44,51 @@ export class AgentLoopService {
     const startTime = Date.now();
 
     try {
-      // STEP 1: Increment cycle
+      // ── STEP 1: Increment cycle ──
       const cycle = await this.intelligenceEngine.incrementCycle();
       yield { event: 'message', data: { step: 'cycle', cycle } };
 
-      // STEP 2: Build system prompt (Protocol Engine + Intelligence Engine)
+      // ── STEP 2: Pre-cycle maintenance (learning decay) ──
+      if (cycle >= this.config.decayStartCycle) {
+        const archived = await this.intelligenceEngine.applyDecay(cycle);
+        if (archived > 0) {
+          yield { event: 'message', data: { step: 'decay', archived } };
+        }
+      }
+
+      // ── STEP 3: Build system prompt (Protocol + Intelligence + Director files) ──
       const intelligenceSummary = await this.intelligenceEngine.getIntelligenceSummary();
       const recentBitacora = await this.intelligenceEngine.getRecentBitacora(15);
-      const bitacoraHistory = recentBitacora
-        .map((e) => `Cycle ${e.cycleId}: ${e.phase} — ${e.result}`)
-        .join('\n');
+      const bitacoraHistory = formatBitacoraForPrompt(recentBitacora);
+
+      // Load director files from context documents
+      const contextDocs = await this.intelligenceEngine.getContextDocuments();
+      const directorFiles = extractDirectorFiles(contextDocs);
 
       const systemPrompt = await this.protocolEngine.buildSystemPrompt({
         cycle,
         mode: 'SYNAPTIC',
-        directorFiles: {
-          mantra: '', // Will be loaded from storage in future
-          rules: '',
-          designDoc: '',
-        },
+        directorFiles,
         intelligenceSummary,
         bitacoraHistory,
         userLanguage: 'es',
         modelId: request.provider.model,
       });
 
-      // STEP 3: Wrap user prompt with enforcement markers
+      // ── STEP 4: Wrap user prompt with enforcement markers ──
+      const loadedFiles = Object.entries(directorFiles)
+        .filter(([, v]) => v.length > 0)
+        .map(([k]) => k.toUpperCase());
+      if (intelligenceSummary.topLearnings.length > 0) loadedFiles.push('INTELLIGENCE');
+
       const wrappedPrompt = this.protocolEngine.wrapUserPrompt({
         userPrompt: request.prompt,
         cycle,
-        loadedFiles: ['MANTRA', 'RULES', 'DESIGN_DOC', 'INTELLIGENCE'],
+        loadedFiles,
         enforcementMode: 'STRICT',
       });
 
-      // STEP 4: LLM interaction (streaming)
+      // ── STEP 5: LLM interaction (streaming) ──
       let fullResponse = '';
       const messages: LLMMessage[] = [
         ...request.messages,
@@ -94,12 +104,14 @@ export class AgentLoopService {
         if (chunk.type === 'text' && chunk.content) {
           fullResponse += chunk.content;
           yield { event: 'message', data: chunk.content };
+        } else if (chunk.type === 'tool_use_start') {
+          yield { event: 'tool_use', data: chunk.toolCall };
         } else if (chunk.type === 'done') {
           yield { event: 'message', data: { step: 'llm_done', usage: chunk.usage } };
         }
       }
 
-      // STEP 5: Enforcement validation + regeneration loop
+      // ── STEP 6: Enforcement validation + regeneration loop ──
       let validationResult = this.enforcementEngine.validate(fullResponse);
       let attempts = 1;
 
@@ -119,7 +131,6 @@ export class AgentLoopService {
           this.config.maxRegenerationAttempts,
         );
 
-        // Re-send to LLM (non-streaming for regeneration)
         const regenResponse = await this.llmProvider.sendMessage({
           model: request.provider.model,
           messages: [
@@ -136,14 +147,17 @@ export class AgentLoopService {
         attempts++;
       }
 
-      // STEP 6: SAI audit (skip if no changed files — tools not connected yet)
-      const changedFiles: FileContent[] = []; // Will come from tool executor
+      // ── STEP 7: SAI micro-audit (if files changed) ──
+      const changedFiles = extractChangedFiles(fullResponse);
+      let saiResult: { score: number; grade: string; findings: number } | undefined;
+
       if (changedFiles.length > 0) {
-        const auditResult = await this.saiEngine.audit(changedFiles);
-        yield { event: 'sai_audit', data: auditResult };
+        const audit = await this.saiEngine.audit(changedFiles);
+        saiResult = { score: audit.score, grade: audit.grade, findings: audit.findings.length };
+        yield { event: 'sai_audit', data: saiResult };
       }
 
-      // STEP 7: Persist to bitacora
+      // ── STEP 8: Persist to intelligence ──
       const duration = `${Date.now() - startTime}ms`;
       const bitacoraEntry: BitacoraCycleEntry = {
         cycleId: cycle,
@@ -165,10 +179,11 @@ export class AgentLoopService {
         },
         lessonsLearned: [],
         synapticStrength: Math.min(cycle * 3, 100),
+        saiAudit: saiResult ? { score: saiResult.score, grade: saiResult.grade, findingsCount: saiResult.findings } : undefined,
       };
       await this.intelligenceEngine.appendBitacora(bitacoraEntry);
 
-      // STEP 8: Update session
+      // Update session state
       await this.intelligenceEngine.updateSession({
         currentCycle: cycle,
         synapticStrength: Math.min(cycle * 3, 100),
@@ -179,14 +194,20 @@ export class AgentLoopService {
         },
       });
 
-      // STEP 9: Guidance (try, but don't fail if not fully implemented)
-      let guidance = null;
+      // ── STEP 9: Guidance (non-critical) ──
+      let guidanceData: { nextSteps: unknown[]; orientation: string } | undefined;
       try {
-        guidance = await this.guidanceEngine.generateGuidance();
+        const guidance = await this.guidanceEngine.generateGuidance();
+        guidanceData = {
+          nextSteps: guidance.nextSteps.slice(0, 3),
+          orientation: guidance.orientation,
+        };
+        yield { event: 'message', data: { step: 'guidance', ...guidanceData } };
       } catch {
-        // Guidance not critical — skip if not implemented
+        // Guidance is non-critical
       }
 
+      // ── DONE ──
       yield {
         event: 'done',
         data: {
@@ -195,8 +216,9 @@ export class AgentLoopService {
           grade: validationResult.grade,
           valid: validationResult.valid,
           regenerationAttempts: attempts - 1,
+          saiAudit: saiResult,
+          guidance: guidanceData,
           duration,
-          guidance: guidance?.nextSteps?.slice(0, 3) ?? [],
         },
       };
     } catch (error: unknown) {
@@ -204,9 +226,73 @@ export class AgentLoopService {
         event: 'error',
         data: {
           message: error instanceof Error ? error.message : 'Unknown error',
-          stack: error instanceof Error ? error.stack : undefined,
         },
       };
     }
   }
+}
+
+// ─── Helpers (pure functions, no class needed) ────────────────────
+
+/**
+ * Format bitacora entries for system prompt injection.
+ */
+export function formatBitacoraForPrompt(entries: BitacoraCycleEntry[]): string {
+  if (entries.length === 0) return 'No previous cycles recorded.';
+
+  const lines: string[] = [];
+  const latestCycle = entries[0]?.cycleId ?? 0;
+  if (latestCycle > entries.length) {
+    lines.push(`> Showing last ${entries.length} of ~${latestCycle} cycles.\n`);
+  }
+
+  for (const entry of entries) {
+    lines.push(`**Cycle ${entry.cycleId}** (${entry.timestamp}): ${entry.result}`);
+    if (entry.promptOriginal) {
+      lines.push(`  Prompt: ${entry.promptOriginal.substring(0, 150)}...`);
+    }
+    if (entry.metrics) {
+      lines.push(`  Compliance: ${entry.metrics.protocolCompliance}/100`);
+    }
+    if (entry.saiAudit) {
+      lines.push(`  SAI: ${entry.saiAudit.score}/100 (${entry.saiAudit.findingsCount} findings)`);
+    }
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Extract director files from context documents.
+ */
+function extractDirectorFiles(docs: Array<{ name: string; content: string }>): {
+  mantra: string;
+  rules: string;
+  designDoc: string;
+} {
+  const find = (keyword: string): string =>
+    docs.find((d) => d.name.toLowerCase().includes(keyword))?.content ?? '';
+
+  return {
+    mantra: find('mantra'),
+    rules: find('rules'),
+    designDoc: find('design'),
+  };
+}
+
+/**
+ * Extract changed files from LLM response (heuristic).
+ */
+function extractChangedFiles(response: string): FileContent[] {
+  const files: FileContent[] = [];
+  const codeBlockRe = /```(?:typescript|ts|javascript|js)\s*\n\/\/\s*(?:File|file):\s*([^\n]+)\n([\s\S]*?)```/g;
+  let match: RegExpExecArray | null;
+
+  codeBlockRe.lastIndex = 0;
+  while ((match = codeBlockRe.exec(response)) !== null) {
+    files.push({ path: match[1]!.trim(), content: match[2]!.trim() });
+  }
+
+  return files;
 }

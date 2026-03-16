@@ -398,4 +398,59 @@ Este ciclo implemento la logica funcional de los 3 motores restantes: SAI (audit
 
 ---
 
+### Session 5 — AgentLoopService Orquestador + API Endpoints + Bootstrap
+
+**Fecha**: 2026-03-16
+**Fase**: IMPLEMENTATION → INTEGRATION
+**Tipo**: Sistema integrado — 5 engines conectados via orquestador + API REST + DI bootstrap
+**Synaptic Strength**: 25%
+
+#### Contexto
+
+Ciclo critico: los 5 motores que eran modulos aislados ahora son un sistema integrado. El AgentLoopService orquesta los 9 pasos, las API routes exponen la funcionalidad via HTTP, y el bootstrap factory conecta todo via dependency injection.
+
+#### Tareas completadas
+
+| # | Tarea | Estado |
+|---|-------|--------|
+| 1 | AgentLoopService refinado: pre-cycle decay, director files from context, bitacora formatting, SAI file extraction, enhanced SSE events | DONE |
+| 2 | BitacoraManager con fragmentacion y formateo para prompt | DONE |
+| 3 | API Routes: POST /api/agent/task (SSE), GET status/session/learnings/decisions/bitacora/sai/guidance | DONE |
+| 4 | Server setup: Fastify con registro de todas las rutas | DONE |
+| 5 | Bootstrap factory: DI wiring de 5 engines + storage + LLM + routes | DONE |
+| 6 | Entry point (index.ts) con startup completo | DONE |
+| 7 | Tests API routes (9 tests) + BitacoraManager (7 tests) = 16 tests nuevos | DONE |
+
+#### Verificacion
+
+- `npm run typecheck` → PASS
+- `npm run test` → **74/74 tests PASS** (58 previos + 16 nuevos)
+
+#### API Endpoints disponibles
+
+| Metodo | Ruta | Descripcion |
+|--------|------|-------------|
+| GET | /health | Health check (unauthenticated) |
+| POST | /api/agent/task | Ejecutar tarea (SSE streaming) |
+| GET | /api/agent/status | Estado del agente |
+| GET | /api/:tid/:pid/session | Estado de sesion |
+| GET | /api/:tid/:pid/learnings | Learnings (filtrable por confidence) |
+| GET | /api/:tid/:pid/decisions | Decisiones registradas |
+| GET | /api/:tid/:pid/bitacora | Entradas recientes de bitacora |
+| GET | /api/:tid/:pid/sai/summary | Resumen de auditoria SAI |
+| GET | /api/:tid/:pid/sai/findings | Findings activos |
+| GET | /api/:tid/:pid/guidance | Sugerencias de guidance |
+| GET | /api/:tid/:pid/guidance/progress | Progreso del proyecto |
+
+#### Pendientes para proxima sesion
+
+1. Firestore storage adapters (transicion de in-memory a cloud)
+2. BYOK key management funcional (encriptacion, validacion, rotacion)
+3. Auth middleware (Firebase Auth token verification)
+4. CORS configuration
+5. OpenAI + Gemini providers funcionales
+6. Web UI (Next.js)
+
+---
+
 *SYNAPTIC Protocol v3.0 STRICT — BITACORA Active*

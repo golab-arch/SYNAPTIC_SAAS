@@ -3,19 +3,25 @@
  * Cloud-native AI orchestration platform with BYOK model.
  */
 
-// TODO: Implement in Phase 1
+import { bootstrap } from './bootstrap.js';
 
-export async function main(): Promise<void> {
+async function main(): Promise<void> {
   const port = Number(process.env['PORT'] ?? 3000);
+  const apiKey = process.env['ANTHROPIC_API_KEY'] ?? '';
 
-  console.log(`SYNAPTIC_SAAS starting on port ${port}...`);
+  console.log('SYNAPTIC_SAAS starting...');
 
-  // TODO: Implement in Phase 1
-  // 1. Load environment config
-  // 2. Initialize Firebase Admin SDK
-  // 3. Create and start Fastify server
-  // 4. Register graceful shutdown handlers
-  throw new Error('main() not implemented — see Phase 1 roadmap');
+  const app = await bootstrap({
+    port,
+    llm: apiKey ? { provider: 'anthropic', apiKey } : undefined,
+  });
+
+  await app.server.listen({ port, host: '0.0.0.0' });
+
+  console.log(`SYNAPTIC_SAAS running on port ${port}`);
+  console.log(`  Health: http://localhost:${port}/health`);
+  console.log(`  Agent:  POST http://localhost:${port}/api/agent/task`);
+  console.log(`  Status: GET  http://localhost:${port}/api/agent/status`);
 }
 
 main().catch((error: unknown) => {
