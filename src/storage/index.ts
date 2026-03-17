@@ -11,6 +11,9 @@ export type {
   IProtocolStorage,
 } from './interfaces.js';
 
+// Factory
+export { createStorageAdapters, type StorageType, type StorageAdapters } from './storage-factory.js';
+
 // In-memory adapters (development/testing)
 export {
   InMemoryEnforcementStorage,
@@ -19,10 +22,11 @@ export {
   InMemoryGuidanceStorage,
 } from './memory/index.js';
 
-// Firestore adapters (production — stubs)
+// Firestore adapters (production)
 export {
   FirestoreEnforcementStorage,
   FirestoreSAIStorage,
   FirestoreIntelligenceStorage,
   FirestoreGuidanceStorage,
+  initializeFirestoreClient,
 } from './firestore/index.js';

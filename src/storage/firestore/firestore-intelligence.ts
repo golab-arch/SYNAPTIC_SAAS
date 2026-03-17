@@ -1,9 +1,9 @@
 /**
- * Firestore Intelligence Storage — stub.
+ * Firestore Intelligence Storage — production adapter.
+ * Collection: tenants/{tenantId}/projects/{projectId}/...
  */
 
-// TODO: Implement in Phase 4
-
+import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 import type { IIntelligenceStorage } from '../interfaces.js';
 import type {
   DecisionRecord,
@@ -15,40 +15,81 @@ import type {
 } from '../../engines/intelligence/types.js';
 
 export class FirestoreIntelligenceStorage implements IIntelligenceStorage {
-  async saveDecision(_tenantId: string, _projectId: string, _decision: DecisionRecord): Promise<void> {
-    throw new Error('FirestoreIntelligenceStorage not implemented');
+  constructor(private readonly db: Firestore) {}
+
+  private ref(tenantId: string, projectId: string) {
+    return this.db.collection('tenants').doc(tenantId).collection('projects').doc(projectId);
   }
-  async getDecisions(_tenantId: string, _projectId: string, _limit?: number): Promise<DecisionRecord[]> {
-    throw new Error('FirestoreIntelligenceStorage not implemented');
+
+  // ── Decisions ──
+  async saveDecision(tenantId: string, projectId: string, decision: DecisionRecord): Promise<void> {
+    await this.ref(tenantId, projectId)
+      .collection('decisions').doc(decision.decisionId)
+      .set({ ...decision, _savedAt: FieldValue.serverTimestamp() });
   }
-  async saveLearning(_tenantId: string, _projectId: string, _learning: LearningEntry): Promise<void> {
-    throw new Error('FirestoreIntelligenceStorage not implemented');
+
+  async getDecisions(tenantId: string, projectId: string, limit = 50): Promise<DecisionRecord[]> {
+    const snap = await this.ref(tenantId, projectId)
+      .collection('decisions').orderBy('cycle', 'desc').limit(limit).get();
+    return snap.docs.map((d) => d.data() as DecisionRecord);
   }
-  async getLearnings(_tenantId: string, _projectId: string): Promise<LearningEntry[]> {
-    throw new Error('FirestoreIntelligenceStorage not implemented');
+
+  // ── Learnings ──
+  async saveLearning(tenantId: string, projectId: string, learning: LearningEntry): Promise<void> {
+    await this.ref(tenantId, projectId)
+      .collection('learnings').doc(learning.id)
+      .set({ ...learning, _savedAt: FieldValue.serverTimestamp() });
   }
-  async updateLearning(_tenantId: string, _projectId: string, _learningId: string, _updates: Partial<LearningEntry>): Promise<void> {
-    throw new Error('FirestoreIntelligenceStorage not implemented');
+
+  async getLearnings(tenantId: string, projectId: string): Promise<LearningEntry[]> {
+    const snap = await this.ref(tenantId, projectId).collection('learnings').get();
+    return snap.docs.map((d) => d.data() as LearningEntry);
   }
-  async appendBitacora(_tenantId: string, _projectId: string, _entry: BitacoraCycleEntry): Promise<void> {
-    throw new Error('FirestoreIntelligenceStorage not implemented');
+
+  async updateLearning(tenantId: string, projectId: string, learningId: string, updates: Partial<LearningEntry>): Promise<void> {
+    await this.ref(tenantId, projectId).collection('learnings').doc(learningId).update(updates);
   }
-  async getRecentBitacora(_tenantId: string, _projectId: string, _limit: number): Promise<BitacoraCycleEntry[]> {
-    throw new Error('FirestoreIntelligenceStorage not implemented');
+
+  // ── Bitacora ──
+  async appendBitacora(tenantId: string, projectId: string, entry: BitacoraCycleEntry): Promise<void> {
+    const docId = String(entry.cycleId).padStart(6, '0');
+    await this.ref(tenantId, projectId).collection('bitacora').doc(docId).set(entry);
   }
-  async getBitacoraIndex(_tenantId: string, _projectId: string): Promise<BitacoraIndex> {
-    throw new Error('FirestoreIntelligenceStorage not implemented');
+
+  async getRecentBitacora(tenantId: string, projectId: string, limit: number): Promise<BitacoraCycleEntry[]> {
+    const snap = await this.ref(tenantId, projectId)
+      .collection('bitacora').orderBy('cycleId', 'desc').limit(limit).get();
+    return snap.docs.map((d) => d.data() as BitacoraCycleEntry).reverse();
   }
-  async getBitacoraFragment(_tenantId: string, _projectId: string, _fragmentId: string): Promise<string> {
-    throw new Error('FirestoreIntelligenceStorage not implemented');
+
+  async getBitacoraIndex(tenantId: string, projectId: string): Promise<BitacoraIndex> {
+    const snap = await this.ref(tenantId, projectId).collection('bitacora').count().get();
+    const total = snap.data().count;
+    return {
+      fragments: [{ id: '001', startCycle: 1, endCycle: null, lines: total * 20, closed: false }],
+      totalCycles: total,
+      lastUpdated: new Date().toISOString(),
+    };
   }
-  async getContextDocuments(_tenantId: string, _projectId: string): Promise<ContextDocument[]> {
-    throw new Error('FirestoreIntelligenceStorage not implemented');
+
+  async getBitacoraFragment(tenantId: string, projectId: string, _fragmentId: string): Promise<string> {
+    const entries = await this.getRecentBitacora(tenantId, projectId, 500);
+    return JSON.stringify(entries, null, 2);
   }
-  async getSession(_tenantId: string, _projectId: string): Promise<SynapticSession | null> {
-    throw new Error('FirestoreIntelligenceStorage not implemented');
+
+  // ── Context ──
+  async getContextDocuments(tenantId: string, projectId: string): Promise<ContextDocument[]> {
+    const snap = await this.ref(tenantId, projectId).collection('context').get();
+    return snap.docs.map((d) => d.data() as ContextDocument);
   }
-  async updateSession(_tenantId: string, _projectId: string, _session: Partial<SynapticSession>): Promise<void> {
-    throw new Error('FirestoreIntelligenceStorage not implemented');
+
+  // ── Session ──
+  async getSession(tenantId: string, projectId: string): Promise<SynapticSession | null> {
+    const doc = await this.ref(tenantId, projectId).collection('sessions').doc('current').get();
+    return doc.exists ? (doc.data() as SynapticSession) : null;
+  }
+
+  async updateSession(tenantId: string, projectId: string, updates: Partial<SynapticSession>): Promise<void> {
+    await this.ref(tenantId, projectId).collection('sessions').doc('current').set(updates, { merge: true });
   }
 }

@@ -1,51 +1,87 @@
 /**
- * BYOK Key Manager — encrypted storage, validation, and retrieval of user API keys.
- * Keys are encrypted AES-256-GCM via GCP Secret Manager.
- * Keys NEVER appear in logs or plaintext storage.
+ * BYOK Key Manager — encrypted storage, validation, and retrieval.
+ * Keys encrypted AES-256-GCM. NEVER stored in plaintext. NEVER logged.
  */
 
-// TODO: Implement in Phase 2
-
+import { createHash, randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
+import { createProvider } from '../providers/provider-factory.js';
 import type { EncryptedKey, KeyValidationResult } from './types.js';
 
 export class KeyManager {
-  /**
-   * Store an encrypted API key for a user/provider pair.
-   */
-  async storeKey(
-    _userId: string,
-    _providerId: string,
-    _plaintextKey: string,
-  ): Promise<EncryptedKey> {
-    // TODO: Implement in Phase 2
-    // 1. Encrypt with AES-256-GCM
-    // 2. Store in GCP Secret Manager
-    // 3. Store metadata in Firestore
-    throw new Error('KeyManager.storeKey not implemented');
+  private readonly encryptionKey: Buffer;
+
+  constructor(masterKey?: string) {
+    const key = masterKey ?? process.env['ENCRYPTION_KEY'] ?? 'synaptic-dev-key-change-in-prod';
+    this.encryptionKey = createHash('sha256').update(key).digest();
   }
 
   /**
-   * Retrieve and decrypt an API key for use in an LLM call.
-   * The decrypted key must NOT be logged or persisted.
+   * Encrypt an API key for storage.
    */
-  async retrieveKey(_userId: string, _providerId: string): Promise<string> {
-    // TODO: Implement in Phase 2
-    throw new Error('KeyManager.retrieveKey not implemented');
+  prepareForStorage(userId: string, providerId: string, apiKey: string): EncryptedKey {
+    const iv = randomBytes(16);
+    const cipher = createCipheriv('aes-256-gcm', this.encryptionKey, iv);
+
+    let encrypted = cipher.update(apiKey, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    const authTag = cipher.getAuthTag().toString('hex');
+
+    return {
+      id: randomBytes(8).toString('hex'),
+      userId,
+      providerId,
+      encryptedValue: `${iv.toString('hex')}:${authTag}:${encrypted}`,
+      createdAt: new Date(),
+      lastUsedAt: null,
+      isValid: true,
+    };
   }
 
   /**
-   * Validate an API key against its provider before storing.
+   * Decrypt a stored key. The decrypted key MUST NOT be logged or persisted.
    */
-  async validateKey(_providerId: string, _plaintextKey: string): Promise<KeyValidationResult> {
-    // TODO: Implement in Phase 2
-    throw new Error('KeyManager.validateKey not implemented');
+  decrypt(storedKey: EncryptedKey): string {
+    const [ivHex, authTagHex, encrypted] = storedKey.encryptedValue.split(':');
+    if (!ivHex || !authTagHex || !encrypted) {
+      throw new Error('Invalid encrypted key format');
+    }
+
+    const decipher = createDecipheriv(
+      'aes-256-gcm',
+      this.encryptionKey,
+      Buffer.from(ivHex, 'hex'),
+    );
+    decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
+
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
   }
 
   /**
-   * Delete a stored key (user-initiated rotation).
+   * Validate an API key by making a minimal call to the provider.
    */
-  async deleteKey(_userId: string, _providerId: string): Promise<void> {
-    // TODO: Implement in Phase 2
-    throw new Error('KeyManager.deleteKey not implemented');
+  async validateKey(providerId: string, apiKey: string): Promise<KeyValidationResult> {
+    try {
+      const provider = createProvider(providerId, apiKey);
+      const valid = await provider.validateApiKey(apiKey);
+      return { isValid: valid, providerId };
+    } catch (error: unknown) {
+      return {
+        isValid: false,
+        providerId,
+        error: error instanceof Error ? error.message : 'Validation failed',
+      };
+    }
+  }
+
+  /**
+   * Detect provider from key prefix format.
+   */
+  detectProvider(apiKey: string): string | null {
+    if (apiKey.startsWith('sk-ant-')) return 'anthropic';
+    if (apiKey.startsWith('sk-')) return 'openai';
+    if (apiKey.startsWith('AIza')) return 'gemini';
+    return null;
   }
 }

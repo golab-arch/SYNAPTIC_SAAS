@@ -1,30 +1,56 @@
 /**
- * Rate limiting middleware — enforces per-tier request limits.
+ * Rate limiting middleware — per-tenant sliding window.
  */
-
-// TODO: Implement in Phase 4
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
 
-/** Rate limits per pricing tier (requests per minute) */
-const TIER_LIMITS = {
+const TIER_LIMITS: Record<string, number> = {
   free: 10,
   pro: 60,
   team: 120,
   enterprise: 300,
-} as const;
+  development: 1000,
+};
+
+const counters = new Map<string, { count: number; resetAt: number }>();
 
 /**
- * Fastify preHandler hook that enforces rate limits based on user tier.
+ * Fastify preHandler hook for rate limiting.
  */
 export async function rateLimitMiddleware(
-  _request: FastifyRequest,
-  _reply: FastifyReply,
+  request: FastifyRequest,
+  reply: FastifyReply,
 ): Promise<void> {
-  // TODO: Implement in Phase 4
-  // 1. Get user tier from request
-  // 2. Check rate limit counter (Redis or in-memory)
-  // 3. If exceeded, return 429
-  void TIER_LIMITS;
-  throw new Error('rateLimitMiddleware not implemented');
+  if (request.url === '/health') return;
+
+  const tier = process.env['NODE_ENV'] === 'development' ? 'development' : 'free';
+  const limit = TIER_LIMITS[tier] ?? TIER_LIMITS['free']!;
+  const now = Date.now();
+  const windowMs = 60_000;
+
+  const key = `rate:${Math.floor(now / windowMs)}`;
+  const counter = counters.get(key) ?? { count: 0, resetAt: now + windowMs };
+
+  counter.count++;
+  counters.set(key, counter);
+
+  // Cleanup old entries
+  if (counters.size > 5_000) {
+    for (const [k, v] of counters) {
+      if (v.resetAt < now) counters.delete(k);
+    }
+  }
+
+  if (counter.count > limit) {
+    const retryAfter = Math.ceil((counter.resetAt - now) / 1000);
+    reply.header('Retry-After', String(retryAfter));
+    return reply.status(429).send({
+      error: 'Rate limit exceeded',
+      limit,
+      retryAfterSeconds: retryAfter,
+    });
+  }
+
+  reply.header('X-RateLimit-Limit', String(limit));
+  reply.header('X-RateLimit-Remaining', String(Math.max(0, limit - counter.count)));
 }

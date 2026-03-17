@@ -1,36 +1,35 @@
 /**
- * Firestore Enforcement Storage — stub.
+ * Firestore Enforcement Storage — production adapter.
  */
 
-// TODO: Implement in Phase 4
-
+import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 import type { IEnforcementStorage } from '../interfaces.js';
 import type { ComplianceHistoryEntry, Violation } from '../../engines/enforcement/types.js';
 
 export class FirestoreEnforcementStorage implements IEnforcementStorage {
-  async saveComplianceEntry(
-    _tenantId: string,
-    _projectId: string,
-    _entry: ComplianceHistoryEntry,
-  ): Promise<void> {
-    // TODO: Implement in Phase 4 — db.collection('tenants/{tenantId}/projects/{projectId}/compliance')
-    throw new Error('FirestoreEnforcementStorage not implemented');
+  constructor(private readonly db: Firestore) {}
+
+  private ref(tenantId: string, projectId: string) {
+    return this.db.collection('tenants').doc(tenantId).collection('projects').doc(projectId);
   }
 
-  async getComplianceHistory(
-    _tenantId: string,
-    _projectId: string,
-    _limit?: number,
-  ): Promise<ComplianceHistoryEntry[]> {
-    throw new Error('FirestoreEnforcementStorage not implemented');
+  async saveComplianceEntry(tenantId: string, projectId: string, entry: ComplianceHistoryEntry): Promise<void> {
+    const docId = String(entry.cycle).padStart(6, '0');
+    await this.ref(tenantId, projectId)
+      .collection('compliance').doc(docId)
+      .set({ ...entry, _savedAt: FieldValue.serverTimestamp() });
   }
 
-  async saveViolations(
-    _tenantId: string,
-    _projectId: string,
-    _cycle: number,
-    _violations: Violation[],
-  ): Promise<void> {
-    throw new Error('FirestoreEnforcementStorage not implemented');
+  async getComplianceHistory(tenantId: string, projectId: string, limit = 50): Promise<ComplianceHistoryEntry[]> {
+    const snap = await this.ref(tenantId, projectId)
+      .collection('compliance').orderBy('cycle', 'desc').limit(limit).get();
+    return snap.docs.map((d) => d.data() as ComplianceHistoryEntry).reverse();
+  }
+
+  async saveViolations(tenantId: string, projectId: string, cycle: number, violations: Violation[]): Promise<void> {
+    const docId = String(cycle).padStart(6, '0');
+    await this.ref(tenantId, projectId)
+      .collection('violations').doc(docId)
+      .set({ cycle, violations, _savedAt: FieldValue.serverTimestamp() });
   }
 }

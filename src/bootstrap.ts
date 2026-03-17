@@ -1,6 +1,6 @@
 /**
  * Bootstrap — dependency injection factory.
- * Wires all engines + storage + LLM provider + routes.
+ * Wires all engines + storage + LLM provider + key manager + routes.
  */
 
 import type { FastifyInstance } from 'fastify';
@@ -13,25 +13,24 @@ import { DEFAULT_INTELLIGENCE_CONFIG } from './engines/intelligence/constants.js
 import { GuidanceEngine } from './engines/guidance/guidance-engine.js';
 import { ProtocolEngine } from './engines/protocol/protocol-engine.js';
 import { DEFAULT_TOKEN_BUDGETS } from './engines/protocol/constants.js';
-import { InMemoryIntelligenceStorage } from './storage/memory/memory-intelligence.js';
-import { InMemorySAIStorage } from './storage/memory/memory-sai.js';
-import { InMemoryGuidanceStorage } from './storage/memory/memory-guidance.js';
+import { createStorageAdapters, type StorageType } from './storage/storage-factory.js';
 import { createProvider } from './providers/provider-factory.js';
+import { KeyManager } from './keys/key-manager.js';
 import { AgentLoopService } from './orchestrator/agent-loop.js';
 import { createServer } from './api/server.js';
 import type { ILLMProvider } from './providers/types.js';
 
 export interface AppConfig {
   port: number;
-  llm?: {
-    provider: string;
-    apiKey: string;
-  };
+  storageType?: StorageType;
+  llm?: { provider: string; apiKey: string };
+  encryptionKey?: string;
 }
 
 export interface AppInstance {
   server: FastifyInstance;
   agentLoop: AgentLoopService;
+  keyManager: KeyManager;
   engines: {
     enforcement: EnforcementEngine;
     sai: SAIEngine;
@@ -42,7 +41,10 @@ export interface AppInstance {
 }
 
 export async function bootstrap(config: AppConfig): Promise<AppInstance> {
-  // 1. Create engines
+  // 1. Storage adapters
+  const storage = createStorageAdapters(config.storageType ?? 'memory');
+
+  // 2. Engines
   const enforcementEngine = new EnforcementEngine();
   await enforcementEngine.initialize(DEFAULT_ENFORCEMENT_CONFIG);
 
@@ -55,10 +57,9 @@ export async function bootstrap(config: AppConfig): Promise<AppInstance> {
     cacheTTL: 60_000,
   });
 
-  const intelligenceStorage = new InMemoryIntelligenceStorage();
   const intelligenceEngine = new IntelligenceEngine();
   await intelligenceEngine.initialize({
-    storage: intelligenceStorage,
+    storage: storage.intelligence,
     ...DEFAULT_INTELLIGENCE_CONFIG,
   });
 
@@ -71,27 +72,29 @@ export async function bootstrap(config: AppConfig): Promise<AppInstance> {
     timeout: 5000,
     extensionWhitelist: ['.ts', '.tsx', '.js', '.jsx'],
     excludePatterns: ['node_modules', 'dist', '.git'],
-    storage: new InMemorySAIStorage(),
+    storage: storage.sai,
   });
 
   const guidanceEngine = new GuidanceEngine();
   await guidanceEngine.initialize({
-    storage: new InMemoryGuidanceStorage(),
+    storage: storage.guidance,
     intelligenceEngine,
     maxSuggestions: 5,
     priorityWeights: { urgency: 0.4, dependency: 0.35, complexity: 0.25 },
   });
 
-  // 2. Create LLM provider (BYOK — API key from config or per-request)
+  // 3. Key manager (BYOK)
+  const keyManager = new KeyManager(config.encryptionKey);
+
+  // 4. Default LLM provider
   let llmProvider: ILLMProvider;
   if (config.llm?.apiKey) {
     llmProvider = createProvider(config.llm.provider ?? 'anthropic', config.llm.apiKey);
   } else {
-    // Placeholder provider for when no default key is set (BYOK per-request)
     llmProvider = createProvider('anthropic', 'placeholder-key');
   }
 
-  // 3. Create orchestrator
+  // 5. Orchestrator
   const agentLoop = new AgentLoopService(
     protocolEngine,
     intelligenceEngine,
@@ -101,17 +104,19 @@ export async function bootstrap(config: AppConfig): Promise<AppInstance> {
     llmProvider,
   );
 
-  // 4. Create server with routes
+  // 6. Server
   const server = await createServer({
     agentLoop,
     intelligence: intelligenceEngine,
     sai: saiEngine,
     guidance: guidanceEngine,
+    keyManager,
   });
 
   return {
     server,
     agentLoop,
+    keyManager,
     engines: {
       enforcement: enforcementEngine,
       sai: saiEngine,

@@ -1,34 +1,53 @@
 /**
- * Firestore SAI Storage — stub.
+ * Firestore SAI Storage — production adapter.
  */
 
-// TODO: Implement in Phase 4
-
+import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 import type { ISAIStorage } from '../interfaces.js';
 import type { SAIAuditResult, SAICycleEntry, Finding } from '../../engines/sai/types.js';
 
 export class FirestoreSAIStorage implements ISAIStorage {
-  async saveAuditResult(_tenantId: string, _projectId: string, _result: SAIAuditResult, _cycle: number): Promise<void> {
-    throw new Error('FirestoreSAIStorage not implemented');
+  constructor(private readonly db: Firestore) {}
+
+  private ref(tenantId: string, projectId: string) {
+    return this.db.collection('tenants').doc(tenantId).collection('projects').doc(projectId);
   }
 
-  async getAuditHistory(_tenantId: string, _projectId: string, _limit?: number): Promise<SAICycleEntry[]> {
-    throw new Error('FirestoreSAIStorage not implemented');
+  async saveAuditResult(tenantId: string, projectId: string, result: SAIAuditResult, cycle: number): Promise<void> {
+    const docId = String(cycle).padStart(6, '0');
+    await this.ref(tenantId, projectId)
+      .collection('audit_history').doc(docId)
+      .set({ cycle, score: result.score, grade: result.grade, findingsCount: result.findings.length, filesAudited: result.filesAudited, timestamp: new Date().toISOString(), _savedAt: FieldValue.serverTimestamp() });
   }
 
-  async saveFindings(_tenantId: string, _projectId: string, _findings: Finding[]): Promise<void> {
-    throw new Error('FirestoreSAIStorage not implemented');
+  async getAuditHistory(tenantId: string, projectId: string, limit = 50): Promise<SAICycleEntry[]> {
+    const snap = await this.ref(tenantId, projectId)
+      .collection('audit_history').orderBy('cycle', 'desc').limit(limit).get();
+    return snap.docs.map((d) => d.data() as SAICycleEntry).reverse();
   }
 
-  async getActiveFindings(_tenantId: string, _projectId: string): Promise<Finding[]> {
-    throw new Error('FirestoreSAIStorage not implemented');
+  async saveFindings(tenantId: string, projectId: string, findings: Finding[]): Promise<void> {
+    const batch = this.db.batch();
+    const col = this.ref(tenantId, projectId).collection('findings');
+    for (const f of findings) {
+      batch.set(col.doc(f.id), f);
+    }
+    await batch.commit();
   }
 
-  async getResolvedFindings(_tenantId: string, _projectId: string): Promise<Finding[]> {
-    throw new Error('FirestoreSAIStorage not implemented');
+  async getActiveFindings(tenantId: string, projectId: string): Promise<Finding[]> {
+    const snap = await this.ref(tenantId, projectId)
+      .collection('findings').where('status', '==', 'OPEN').get();
+    return snap.docs.map((d) => d.data() as Finding);
   }
 
-  async updateFinding(_tenantId: string, _projectId: string, _findingId: string, _updates: Partial<Finding>): Promise<void> {
-    throw new Error('FirestoreSAIStorage not implemented');
+  async getResolvedFindings(tenantId: string, projectId: string): Promise<Finding[]> {
+    const snap = await this.ref(tenantId, projectId)
+      .collection('findings').where('status', '==', 'RESOLVED').get();
+    return snap.docs.map((d) => d.data() as Finding);
+  }
+
+  async updateFinding(tenantId: string, projectId: string, findingId: string, updates: Partial<Finding>): Promise<void> {
+    await this.ref(tenantId, projectId).collection('findings').doc(findingId).update(updates);
   }
 }

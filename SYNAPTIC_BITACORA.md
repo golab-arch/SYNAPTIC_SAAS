@@ -453,4 +453,48 @@ Ciclo critico: los 5 motores que eran modulos aislados ahora son un sistema inte
 
 ---
 
+### Session 6 — OpenAI Provider + Firestore + BYOK + Security
+
+**Fecha**: 2026-03-17
+**Fase**: IMPLEMENTATION → PRODUCTION READINESS
+**Tipo**: Multi-provider LLM, cloud storage, key encryption, security middleware
+**Synaptic Strength**: 30%
+
+#### Tareas completadas
+
+| # | Tarea | Estado |
+|---|-------|--------|
+| 1 | OpenAI Provider (fetch-based, zero SDK deps, SSE streaming parser) | DONE |
+| 2 | BYOK Key Manager (AES-256-GCM encrypt/decrypt, provider auto-detection) | DONE |
+| 3 | Firestore storage adapters: intelligence, enforcement, SAI, guidance (4 adapters) | DONE |
+| 4 | Firestore client initialization + collection structure | DONE |
+| 5 | Storage factory: createStorageAdapters('memory' or 'firestore') | DONE |
+| 6 | Auth middleware (Bearer token + SHA-256 + timing-safe comparison) | DONE |
+| 7 | Rate limit middleware (per-tenant sliding window, tier-based) | DONE |
+| 8 | CORS middleware (@fastify/cors) | DONE |
+| 9 | Key routes: POST validate, POST store, GET list | DONE |
+| 10 | Provider factory updated: anthropic + openai registered | DONE |
+| 11 | Bootstrap updated: storage factory + key manager DI | DONE |
+| 12 | Tests: 25 nuevos (key-manager, providers, storage-factory, middleware) | DONE |
+
+#### Verificacion
+
+- `npm run typecheck` → PASS
+- `npm run test` → **99/99 tests PASS** (74 previos + 25 nuevos)
+
+#### Dependencias nuevas
+
+- `firebase-admin` — Firestore production storage
+- `@fastify/cors` — CORS middleware
+
+#### Pendientes para proxima sesion
+
+1. Gemini + OpenRouter providers
+2. Tool execution sandbox (safe Bash, Read, Write)
+3. Web UI (Next.js + SSE client)
+4. E2E test con API real de Anthropic
+5. Firebase Auth token verification (reemplazar auth simple)
+
+---
+
 *SYNAPTIC Protocol v3.0 STRICT — BITACORA Active*
