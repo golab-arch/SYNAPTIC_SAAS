@@ -17,6 +17,8 @@ import { createStorageAdapters, type StorageType } from './storage/storage-facto
 import { createProvider } from './providers/provider-factory.js';
 import { KeyManager } from './keys/key-manager.js';
 import { AgentLoopService } from './orchestrator/agent-loop.js';
+import { ToolExecutor } from './tools/tool-executor.js';
+import { WorkspaceManager } from './tools/workspace-manager.js';
 import { createServer } from './api/server.js';
 import type { ILLMProvider } from './providers/types.js';
 
@@ -94,7 +96,12 @@ export async function bootstrap(config: AppConfig): Promise<AppInstance> {
     llmProvider = createProvider('anthropic', 'placeholder-key');
   }
 
-  // 5. Orchestrator
+  // 5. Tool executor (default workspace)
+  const workspaceManager = new WorkspaceManager();
+  const defaultWorkspace = await workspaceManager.getWorkspace('default', 'default');
+  const toolExecutor = new ToolExecutor(defaultWorkspace);
+
+  // 6. Orchestrator
   const agentLoop = new AgentLoopService(
     protocolEngine,
     intelligenceEngine,
@@ -102,6 +109,7 @@ export async function bootstrap(config: AppConfig): Promise<AppInstance> {
     saiEngine,
     guidanceEngine,
     llmProvider,
+    toolExecutor,
   );
 
   // 6. Server

@@ -80,6 +80,7 @@ export class KeyManager {
    */
   detectProvider(apiKey: string): string | null {
     if (apiKey.startsWith('sk-ant-')) return 'anthropic';
+    if (apiKey.startsWith('sk-or-')) return 'openrouter';
     if (apiKey.startsWith('sk-')) return 'openai';
     if (apiKey.startsWith('AIza')) return 'gemini';
     return null;

@@ -10,6 +10,7 @@ import type { ISAIEngine, FileContent } from '../engines/sai/types.js';
 import type { IIntelligenceEngine, BitacoraCycleEntry } from '../engines/intelligence/types.js';
 import type { IGuidanceEngine } from '../engines/guidance/types.js';
 import type { IProtocolEngine } from '../engines/protocol/types.js';
+import type { ToolExecutor } from '../tools/tool-executor.js';
 import type { OrchestrationRequest, SSEEvent } from './types.js';
 
 export interface AgentLoopConfig {
@@ -32,6 +33,7 @@ export class AgentLoopService {
     private readonly saiEngine: ISAIEngine,
     private readonly guidanceEngine: IGuidanceEngine,
     private readonly llmProvider: ILLMProvider,
+    private readonly toolExecutor?: ToolExecutor,
     config?: Partial<AgentLoopConfig>,
   ) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -88,26 +90,66 @@ export class AgentLoopService {
         enforcementMode: 'STRICT',
       });
 
-      // ── STEP 5: LLM interaction (streaming) ──
+      // ── STEP 5: LLM interaction with tool use loop ──
       let fullResponse = '';
       const messages: LLMMessage[] = [
         ...request.messages,
         { role: 'user' as const, content: wrappedPrompt },
       ];
+      const toolDefs = this.toolExecutor?.getToolDefinitions() ?? [];
+      const maxToolRounds = 20;
 
-      for await (const chunk of this.llmProvider.streamMessage({
-        model: request.provider.model,
-        messages,
-        systemPrompt,
-        maxTokens: 4096,
-      })) {
-        if (chunk.type === 'text' && chunk.content) {
-          fullResponse += chunk.content;
-          yield { event: 'message', data: chunk.content };
-        } else if (chunk.type === 'tool_use_start') {
-          yield { event: 'tool_use', data: chunk.toolCall };
-        } else if (chunk.type === 'done') {
-          yield { event: 'message', data: { step: 'llm_done', usage: chunk.usage } };
+      for (let toolRound = 0; toolRound < maxToolRounds; toolRound++) {
+        let currentToolId: string | undefined;
+        let currentToolName: string | undefined;
+        let toolInputJson = '';
+        const pendingToolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }> = [];
+
+        for await (const chunk of this.llmProvider.streamMessage({
+          model: request.provider.model,
+          messages,
+          systemPrompt,
+          tools: toolDefs,
+          maxTokens: 4096,
+        })) {
+          if (chunk.type === 'text' && chunk.content) {
+            fullResponse += chunk.content;
+            yield { event: 'message', data: chunk.content };
+          } else if (chunk.type === 'tool_use_start') {
+            // Finalize previous tool call if any
+            if (currentToolName && currentToolId) {
+              try {
+                pendingToolCalls.push({ id: currentToolId, name: currentToolName, input: JSON.parse(toolInputJson || '{}') as Record<string, unknown> });
+              } catch { /* skip malformed */ }
+            }
+            currentToolId = chunk.toolCall?.id;
+            currentToolName = chunk.toolCall?.name;
+            toolInputJson = '';
+            yield { event: 'tool_use', data: chunk.toolCall };
+          } else if (chunk.type === 'tool_use_input') {
+            toolInputJson += chunk.content ?? '';
+          } else if (chunk.type === 'done') {
+            // Finalize last tool call
+            if (currentToolName && currentToolId) {
+              try {
+                pendingToolCalls.push({ id: currentToolId, name: currentToolName, input: JSON.parse(toolInputJson || '{}') as Record<string, unknown> });
+              } catch { /* skip */ }
+            }
+            yield { event: 'message', data: { step: 'llm_done', usage: chunk.usage } };
+          }
+        }
+
+        // If no tool calls, LLM loop is done
+        if (pendingToolCalls.length === 0 || !this.toolExecutor) break;
+
+        // Execute tool calls and feed results back to LLM
+        messages.push({ role: 'assistant' as const, content: fullResponse });
+        fullResponse = '';
+
+        for (const tc of pendingToolCalls) {
+          const result = await this.toolExecutor.execute({ id: tc.id, name: tc.name, input: tc.input });
+          yield { event: 'tool_result', data: { tool: tc.name, output: result.output.substring(0, 5000), isError: result.isError } };
+          messages.push({ role: 'user' as const, content: `[Tool result for ${tc.name}]: ${result.output.substring(0, 10000)}` });
         }
       }
 

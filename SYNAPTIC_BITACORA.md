@@ -497,4 +497,56 @@ Ciclo critico: los 5 motores que eran modulos aislados ahora son un sistema inte
 
 ---
 
+### Session 7 — Tool Sandbox + 4 Providers + Tool Use Loop
+
+**Fecha**: 2026-03-17
+**Fase**: IMPLEMENTATION COMPLETE
+**Tipo**: Backend completo — 4 providers, 6 tools en sandbox, tool use loop
+**Synaptic Strength**: 35%
+
+#### Tareas completadas
+
+| # | Tarea | Estado |
+|---|-------|--------|
+| 1 | PathValidator: path traversal prevention, blocked files (.env, .git) | DONE |
+| 2 | 6 tools: Read, Write, Edit, Glob, Grep, Bash — all sandboxed | DONE |
+| 3 | WorkspaceManager: per-tenant isolated dirs | DONE |
+| 4 | ToolExecutor: dispatch + definitions + batch execution | DONE |
+| 5 | Bash whitelist: only safe commands, blocks rm/curl/sudo/eval/system paths | DONE |
+| 6 | GeminiProvider: fetch-based, functionDeclarations format, system_instruction | DONE |
+| 7 | OpenRouterProvider: OpenAI-compatible with attribution headers | DONE |
+| 8 | openai-compat.ts: shared message/tool/stream helpers for OpenAI + OpenRouter | DONE |
+| 9 | Provider factory: 4 providers registered (anthropic, openai, gemini, openrouter) | DONE |
+| 10 | AgentLoop tool use loop: stream → tool_use → execute → feed back (max 20 rounds) | DONE |
+| 11 | Bootstrap: ToolExecutor + WorkspaceManager wired | DONE |
+| 12 | Tests: 27 new (tools, path validation, providers, factory) | DONE |
+
+#### Verificacion
+
+- `npm run typecheck` → PASS
+- `npm run test` → **126/126 tests PASS** (99 previos + 27 nuevos)
+
+#### Estado del backend
+
+| Componente | Estado | Detalles |
+|-----------|--------|---------|
+| LLM Providers | 4 funcionales | Anthropic (SDK), OpenAI (fetch), Gemini (fetch), OpenRouter (fetch) |
+| Tool Sandbox | 6 tools | Read, Write, Edit, Glob, Grep, Bash — path validated |
+| 5 Engines | Funcionales | Enforcement, SAI, Intelligence, Guidance, Protocol |
+| Orchestrator | 9 pasos + tool loop | Up to 20 tool rounds per cycle |
+| API | 12 endpoints | Agent, Intelligence, SAI, Guidance, Keys, Health |
+| Storage | Memory + Firestore | Factory selectable |
+| Security | Auth + Rate Limit + CORS | Middleware stack |
+| Tests | 126 passing | Unit + integration |
+
+#### Pendientes para proxima sesion
+
+1. Frontend React/Next.js: Chat interface con SSE streaming
+2. Decision Gate UI interactivo
+3. Dashboard metricas (compliance, SAI, strength)
+4. E2E test con API real de Anthropic
+5. Firebase Auth (reemplazar auth simple)
+
+---
+
 *SYNAPTIC Protocol v3.0 STRICT — BITACORA Active*

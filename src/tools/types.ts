@@ -13,11 +13,11 @@ export interface ToolDefinition {
 
 /** Result of executing a tool in the sandbox */
 export interface ToolResult {
-  readonly toolCallId: string;
-  readonly name: string;
-  readonly output: string;
-  readonly isError: boolean;
-  readonly durationMs: number;
+  toolCallId: string;
+  name: string;
+  output: string;
+  isError: boolean;
+  durationMs: number;
 }
 
 /** Configuration for a sandbox instance */
