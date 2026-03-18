@@ -60,6 +60,16 @@ export function useChat() {
           case 'regeneration':
             chat.appendStreamingContent(`\n*Regenerating (attempt ${data?.attempt}/5)...*\n\n`);
             break;
+          case 'decision_gate':
+            chat.setDecisionGate({
+              gateId: (data?.gateId as string) ?? `gate-${Date.now()}`,
+              taskId,
+              title: (data?.title as string) ?? 'Decision Required',
+              description: (data?.description as string) ?? '',
+              options: (data?.options as Array<{ id: string; label: string; description: string; riskLevel?: 'low' | 'medium' | 'high' }>) ?? [],
+              recommendation: data?.recommendation as string | undefined,
+            });
+            break;
           case 'sai_audit':
             session.setSAI(data as { score: number; grade: string; findings: number });
             break;

@@ -28,8 +28,8 @@ export class ApiClient {
     return this.get(`/learnings${minConfidence ? `?minConfidence=${minConfidence}` : ''}`);
   }
   async getDecisions(): Promise<DecisionRecord[]> { return this.get('/decisions'); }
-  async submitDecision(body: { gateId: string; selectedOption: string; rationale?: string }): Promise<{ success: boolean }> {
-    return this.post('/decision', body);
+  async submitDecision(gateId: string, selectedOption: string, rationale?: string): Promise<{ ok: boolean }> {
+    return this.post('/decision', { gateId, selectedOption, rationale });
   }
   async getBitacora(limit = 15): Promise<BitacoraCycleEntry[]> { return this.get(`/bitacora?limit=${limit}`); }
   async getSAIState(): Promise<SAIState> { return this.get('/sai/state'); }

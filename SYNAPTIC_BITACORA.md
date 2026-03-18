@@ -597,4 +597,44 @@ Ciclo critico: los 5 motores que eran modulos aislados ahora son un sistema inte
 
 ---
 
+### Session 9 — UX Wiring + Viewers + Auth + Responsive
+
+**Fecha**: 2026-03-18
+**Fase**: FRONTEND UX
+**Synaptic Strength**: 45%
+
+#### Tareas completadas
+
+| # | Tarea | Estado |
+|---|-------|--------|
+| 1 | Decision Gate SSE event handler + API submit endpoint | DONE |
+| 2 | POST /api/:tid/:pid/decision backend endpoint | DONE |
+| 3 | usePolling hook (15s interval, session/guidance refresh) | DONE |
+| 4 | DecisionHistory viewer (gate ID, option, rationale, timestamp) | DONE |
+| 5 | LearningsViewer (confidence slider, type labels, source colors) | DONE |
+| 6 | BitacoraViewer (expandable cycle entries, compliance badges) | DONE |
+| 7 | Sidebar with 4 tabs: Setup, Quality, Memory, Log | DONE |
+| 8 | Auth store (Zustand persist: tenant, project, token) | DONE |
+| 9 | SetupPage (onboarding form with backend health check) | DONE |
+| 10 | Auth flow: SetupPage → login → main app → logout | DONE |
+| 11 | Responsive: sidebar overlay with hamburger toggle (lg: breakpoint) | DONE |
+| 12 | SAITrendChart: pure SVG line chart | DONE |
+| 13 | ErrorBoundary wrapper | DONE |
+| 14 | Skeleton loading component | DONE |
+| 15 | ApiClient.submitDecision (params, not object) | DONE |
+
+#### Verificacion
+
+- Backend: typecheck PASS, **126/126 tests PASS**
+- Frontend: typecheck PASS, build PASS (23s)
+
+#### Pendientes para proxima sesion
+
+1. Firebase Auth (OAuth login)
+2. Deploy (Dockerfile + Vercel)
+3. E2E Playwright tests
+4. Code-split syntax-highlighter (reduce 1MB bundle)
+
+---
+
 *SYNAPTIC Protocol v3.0 STRICT — BITACORA Active*

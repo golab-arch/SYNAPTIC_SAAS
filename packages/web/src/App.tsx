@@ -1,72 +1,92 @@
+import { useState, useEffect } from 'react';
 import { useChat } from './hooks/useChat';
+import { usePolling } from './hooks/usePolling';
+import { useAuthStore } from './store/auth-store';
 import { useSessionStore } from './store/session-store';
 import { useSettingsStore } from './store/settings-store';
 import { useChatStore } from './store/chat-store';
+import { SetupPage } from './components/auth/SetupPage';
+import { Sidebar } from './components/layout/Sidebar';
 import { ChatPanel } from './components/chat/ChatPanel';
 import { ChatInput } from './components/chat/ChatInput';
 import { DecisionGateCard } from './components/decisions/DecisionGateCard';
-import { SAIPanel } from './components/sai/SAIPanel';
-import { GuidancePanel } from './components/guidance/GuidancePanel';
-import { ProviderSelector } from './components/settings/ProviderSelector';
+import { ApiClient } from './api/client';
 
 export function App() {
-  const chat = useChat();
+  const auth = useAuthStore();
   const session = useSessionStore();
   const settings = useSettingsStore();
+  const chat = useChat();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Sync auth → session
+  useEffect(() => {
+    if (auth.isAuthenticated && auth.tenantId && auth.projectId) {
+      session.setSession({ tenantId: auth.tenantId, projectId: auth.projectId });
+    }
+  }, [auth.isAuthenticated, auth.tenantId, auth.projectId, session]);
+
+  // Polling for sidebar data
+  usePolling(15_000);
+
+  // Not authenticated → setup page
+  if (!auth.isAuthenticated) return <SetupPage />;
 
   return (
     <div className="h-screen flex flex-col bg-gray-950 text-white">
       {/* Header */}
       <header className="bg-gray-900 border-b border-gray-700 px-4 py-2 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
+          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="lg:hidden text-gray-400 hover:text-white">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
           <h1 className="text-lg font-bold text-synaptic-500">SYNAPTIC</h1>
-          <span className="text-xs text-gray-500">SaaS</span>
-          <span className="text-xs bg-gray-800 px-2 py-0.5 rounded text-gray-300">
-            Cycle {session.currentCycle}
-          </span>
+          <span className="text-xs text-gray-500 hidden sm:inline">SaaS</span>
+          <span className="text-xs bg-gray-800 px-2 py-0.5 rounded text-gray-300">C{session.currentCycle}</span>
         </div>
         <div className="flex items-center gap-4">
-          <div className="text-xs text-gray-400">
-            Strength: <span className="text-synaptic-400 font-semibold">{session.synapticStrength}%</span>
+          <div className="text-xs text-gray-400 hidden sm:block">
+            Str: <span className="text-synaptic-400 font-semibold">{session.synapticStrength}%</span>
           </div>
-          <div className="text-xs text-gray-400">
-            Compliance: <span className="text-green-400 font-semibold">{session.complianceScore}/100</span>
+          <div className="text-xs text-gray-400 hidden sm:block">
+            Comp: <span className="text-green-400 font-semibold">{session.complianceScore}</span>
           </div>
-          <button onClick={settings.toggleDarkMode} className="text-xs text-gray-500 hover:text-gray-300">
-            {settings.darkMode ? 'Light' : 'Dark'}
-          </button>
+          {auth.displayName && <span className="text-xs text-gray-500 hidden md:inline">{auth.displayName}</span>}
+          <button onClick={auth.logout} className="text-xs text-gray-500 hover:text-red-400">Logout</button>
         </div>
       </header>
 
       {/* Main */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar */}
-        <aside className="w-72 bg-gray-900 border-r border-gray-700 overflow-y-auto flex flex-col shrink-0">
-          <div className="p-3 border-b border-gray-700">
-            <ProviderSelector />
-          </div>
-          <div className="border-b border-gray-700">
-            <SAIPanel />
-          </div>
-          <div className="flex-1">
-            <GuidancePanel />
-          </div>
-        </aside>
+        {/* Mobile overlay */}
+        {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />}
 
-        {/* Chat */}
+        {/* Sidebar */}
+        <div className={`fixed lg:relative inset-y-0 left-0 z-50 transform transition-transform duration-200
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+          <Sidebar />
+        </div>
+
+        {/* Chat area */}
         <main className="flex-1 flex flex-col min-w-0">
-          <ChatPanel
-            messages={chat.messages}
-            isStreaming={chat.isStreaming}
-            streamingContent={chat.streamingContent}
-          />
+          <ChatPanel messages={chat.messages} isStreaming={chat.isStreaming} streamingContent={chat.streamingContent} />
 
           {chat.pendingDecisionGate && (
             <div className="px-4">
               <DecisionGateCard
                 gate={chat.pendingDecisionGate}
-                onSubmit={(option, rationale) => {
-                  console.log('Decision:', option, rationale);
+                onSubmit={async (option, rationale) => {
+                  const gate = chat.pendingDecisionGate!;
+                  const client = new ApiClient(session.tenantId, session.projectId);
+                  await client.submitDecision(gate.gateId, option, rationale).catch(() => {});
+                  useChatStore.getState().addMessage({
+                    id: `msg-${Date.now()}`,
+                    role: 'system',
+                    content: `Decision Gate resolved: Option **${option}** selected.${rationale ? ` Rationale: ${rationale}` : ''}`,
+                    timestamp: new Date().toISOString(),
+                  });
                   useChatStore.getState().setDecisionGate(null);
                 }}
               />
@@ -74,9 +94,7 @@ export function App() {
           )}
 
           {chat.error && (
-            <div className="px-4 py-2 bg-red-900/50 text-red-300 text-sm border-t border-red-800">
-              {chat.error}
-            </div>
+            <div className="px-4 py-2 bg-red-900/50 text-red-300 text-sm border-t border-red-800">{chat.error}</div>
           )}
 
           <ChatInput
