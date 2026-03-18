@@ -549,4 +549,52 @@ Ciclo critico: los 5 motores que eran modulos aislados ahora son un sistema inte
 
 ---
 
+### Session 8 — Frontend React: Chat + SSE + Dashboard
+
+**Fecha**: 2026-03-17
+**Fase**: FRONTEND
+**Tipo**: Web application — React 19 + Vite + Tailwind + Zustand
+**Synaptic Strength**: 40%
+
+#### Tareas completadas
+
+| # | Tarea | Estado |
+|---|-------|--------|
+| 1 | packages/web/ scaffolding: Vite + React 19 + Tailwind + Zustand | DONE |
+| 2 | SSE Client: fetch + ReadableStream, parse server events | DONE |
+| 3 | HTTP Client: typed methods for all API endpoints | DONE |
+| 4 | 3 Zustand stores: chat (messages + streaming), session (cycle/strength), settings (BYOK) | DONE |
+| 5 | useChat hook: send → stream → accumulate → finalize | DONE |
+| 6 | ChatPanel: auto-scroll, message list, streaming content | DONE |
+| 7 | ChatInput: textarea + Enter send + cancel streaming | DONE |
+| 8 | ChatMessage: user/assistant styling + markdown + compliance badges | DONE |
+| 9 | MarkdownRenderer: react-markdown + syntax highlighting + GFM tables | DONE |
+| 10 | DecisionGateCard: radio options, risk badges, rationale, submit | DONE |
+| 11 | EnforcementBadge: grade letter + score inline | DONE |
+| 12 | SAIPanel: grade, score bar, findings count | DONE |
+| 13 | GuidancePanel: orientation, next steps, progress bar | DONE |
+| 14 | ProviderSelector: 4 providers + model + mode dropdowns | DONE |
+| 15 | ApiKeyInput: BYOK key entry + validate via API | DONE |
+| 16 | App layout: header + sidebar + chat area | DONE |
+
+#### Verificacion
+
+- Backend: `npm run typecheck` PASS, `npm run test` **126/126 PASS**
+- Frontend: `npx tsc --noEmit` PASS, `npx vite build` PASS (5.56s)
+- Bundle: 1,015 KB (gzip: 347 KB) — code-split syntax-highlighter later
+
+#### Archivos creados (packages/web/)
+
+27 files: package.json, tsconfig.json, vite.config.ts, tailwind.config.ts, postcss.config.js, index.html, src/main.tsx, src/App.tsx, src/index.css, src/vite-env.d.ts, src/api/{types,client,sse-client}.ts, src/store/{chat,session,settings}-store.ts, src/hooks/useChat.ts, src/components/chat/{ChatPanel,ChatInput,ChatMessage,StreamingIndicator,MarkdownRenderer}.tsx, src/components/decisions/DecisionGateCard.tsx, src/components/enforcement/EnforcementBadge.tsx, src/components/sai/SAIPanel.tsx, src/components/guidance/{GuidancePanel,SuggestionCard}.tsx, src/components/settings/{ProviderSelector,ModelSelector,ApiKeyInput}.tsx
+
+#### Pendientes para proxima sesion
+
+1. Decision Gate submit via API
+2. Session/SAI/Guidance polling (periodic refresh)
+3. Responsive mobile layout
+4. User auth UI (login/signup)
+5. Deploy (Vercel + Cloud Run)
+
+---
+
 *SYNAPTIC Protocol v3.0 STRICT — BITACORA Active*
