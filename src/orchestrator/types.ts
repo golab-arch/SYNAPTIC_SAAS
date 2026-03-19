@@ -43,6 +43,6 @@ export interface OrchestrationResponse {
 
 /** SSE event emitted during streaming */
 export interface SSEEvent {
-  readonly event: 'message' | 'tool_use' | 'tool_result' | 'regeneration' | 'sai_audit' | 'done' | 'error';
+  readonly event: 'message' | 'tool_use' | 'tool_result' | 'regeneration' | 'sai_audit' | 'guidance' | 'done' | 'error';
   readonly data: unknown;
 }

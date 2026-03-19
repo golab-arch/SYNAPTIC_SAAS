@@ -19,12 +19,12 @@ export function App() {
   const chat = useChat();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Sync auth → session
+  // Sync auth → session (use getState() to avoid reactive loop)
   useEffect(() => {
     if (auth.isAuthenticated && auth.tenantId && auth.projectId) {
-      session.setSession({ tenantId: auth.tenantId, projectId: auth.projectId });
+      useSessionStore.getState().setSession({ tenantId: auth.tenantId, projectId: auth.projectId });
     }
-  }, [auth.isAuthenticated, auth.tenantId, auth.projectId, session]);
+  }, [auth.isAuthenticated, auth.tenantId, auth.projectId]);
 
   // Polling for sidebar data
   usePolling(15_000);
@@ -54,6 +54,8 @@ export function App() {
             Comp: <span className="text-green-400 font-semibold">{session.complianceScore}</span>
           </div>
           {auth.displayName && <span className="text-xs text-gray-500 hidden md:inline">{auth.displayName}</span>}
+          <button onClick={() => useChatStore.getState().clearMessages()} title="Clear chat"
+            className="text-xs text-gray-500 hover:text-yellow-400">Clear</button>
           <button onClick={auth.logout} className="text-xs text-gray-500 hover:text-red-400">Logout</button>
         </div>
       </header>

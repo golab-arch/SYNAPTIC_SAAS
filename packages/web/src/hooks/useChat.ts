@@ -44,10 +44,21 @@ export function useChat() {
       (event) => {
         const data = event.data as Record<string, unknown>;
         switch (event.event) {
-          case 'message':
-            if (typeof data === 'string') chat.appendStreamingContent(data);
-            else if (data?.text) chat.appendStreamingContent(data.text as string);
+          case 'message': {
+            // Extract text from various possible shapes
+            let text: string | undefined;
+            if (typeof event.data === 'string') {
+              text = event.data;
+            } else if (data?.text) {
+              text = data.text as string;
+            } else if (data?.content) {
+              text = data.content as string;
+            }
+            if (text) {
+              chat.appendStreamingContent(text);
+            }
             break;
+          }
           case 'tool_use':
             chat.appendStreamingContent(`\n\n**Tool**: ${data?.tool ?? data?.name ?? 'unknown'}\n`);
             break;
@@ -99,6 +110,8 @@ export function useChat() {
           case 'error':
             chat.setError((data?.message as string) ?? 'Unknown error');
             chat.setStreaming(false);
+            break;
+          default:
             break;
         }
       },

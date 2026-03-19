@@ -15,7 +15,7 @@ export async function intelligenceRoutes(
   engine: IIntelligenceEngine,
 ): Promise<void> {
 
-  server.get('/api/:tenantId/:projectId/session', async () => {
+  server.get('/api/:tenantId/:projectId/session', { logLevel: 'warn' }, async () => {
     return engine.getSession();
   });
 

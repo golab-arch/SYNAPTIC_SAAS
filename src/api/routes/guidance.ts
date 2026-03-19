@@ -10,7 +10,7 @@ export async function guidanceRoutes(
   engine: IGuidanceEngine,
 ): Promise<void> {
 
-  server.get('/api/:tenantId/:projectId/guidance', async () => {
+  server.get('/api/:tenantId/:projectId/guidance', { logLevel: 'warn' }, async () => {
     return engine.generateGuidance();
   });
 

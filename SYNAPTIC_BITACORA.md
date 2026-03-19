@@ -637,4 +637,75 @@ Ciclo critico: los 5 motores que eran modulos aislados ahora son un sistema inte
 
 ---
 
+### Session 9b — Hotfixes + OpenRouter Models + Mode Pills + Cleanup
+
+**Fecha**: 2026-03-18
+**Fase**: FRONTEND POLISH
+**Tipo**: Hotfixes criticos + UX enhancements
+**Synaptic Strength**: 50%
+
+#### Hotfixes aplicados (en orden cronologico)
+
+| # | Hotfix | Causa raiz | Impacto |
+|---|--------|-----------|---------|
+| 1 | Infinite re-render en App.tsx | useEffect con `session` en deps creaba loop | Login bloqueado |
+| 2 | HTTP 400 en POST /api/agent/task | Frontend enviaba `tenantScope: {}` nested, backend esperaba flat `tenantId` | Chat no funcionaba |
+| 3 | Terminal spam por polling | GET routes sin `logLevel: 'warn'` logeaban cada 15s | Consola ilegible |
+| 4 | Provider routing ignora providerId | AgentLoop usaba singleton llmProvider, no creaba per-request provider | Solo Anthropic funcionaba |
+| 5 | SSE text chunks no matcheaban orchestrator | Backend emitia `data: string` raw, frontend esperaba `{ text }` | Texto no llegaba |
+| 6 | Done event compliance shape mismatch | Backend: `compliance: number`, frontend esperaba `{ score, grade }` | Metadata corrupta |
+| 7 | MarkdownRenderer no pasaba content | `<ReactMarkdown />` self-closing sin `{content}` como children | Texto invisible |
+
+#### UX Enhancements
+
+| # | Feature | Detalles |
+|---|---------|---------|
+| 1 | OpenRouter dynamic models | Backend proxy GET /api/openrouter/models, hook useOpenRouterModels, ModelCombobox searchable con context/price |
+| 2 | Mode selector pills | Segmented pills (SYNAPTIC/ARCHITECT/IMMEDIATE) inline con ChatInput, responsive (SYN/ARC/IMM mobile), arrow keys |
+| 3 | Clear Chat button | Boton en header para limpiar historial de chat (localStorage) |
+| 4 | Debug logs cleanup | Removidos todos console.log temporales de sse-client, useChat, agent-loop |
+| 5 | ModelSelector eliminado | Reemplazado por ModelCombobox que soporta static + dynamic models |
+
+#### Archivos modificados/creados
+
+**Backend (src/):**
+- `src/orchestrator/agent-loop.ts` — BYOK per-request provider + fix text chunk shape + remove debug logs
+- `src/orchestrator/types.ts` — SSEEvent type: added 'guidance'
+- `src/api/routes/intelligence.ts` — POST /decision endpoint + logLevel: 'warn' on session GET
+- `src/api/routes/sai.ts` — logLevel: 'warn' on summary GET
+- `src/api/routes/guidance.ts` — logLevel: 'warn' on guidance GET
+- `src/api/routes/health.ts` — logLevel: 'warn'
+- `src/api/routes/openrouter-models.ts` — NEW: proxy para OpenRouter models API
+- `src/api/server.ts` — register openrouter-models route
+- `src/__tests__/integration.test.ts` — fix done event compliance shape assertion
+
+**Frontend (packages/web/src/):**
+- `api/sse-client.ts` — fix body shape (flat fields) + remove debug logs
+- `hooks/useChat.ts` — decision_gate event + robust text extraction + remove debug logs
+- `hooks/usePolling.ts` — fix useRef typing for React 19
+- `hooks/useOpenRouterModels.ts` — NEW: fetch models from proxy
+- `components/chat/ChatInput.tsx` — Mode pills integration
+- `components/chat/ModeSelector.tsx` — NEW: segmented pills with keyboard nav
+- `components/chat/MarkdownRenderer.tsx` — FIX: pass content as children
+- `components/settings/ModelCombobox.tsx` — NEW: static dropdown + searchable combobox
+- `components/settings/ProviderSelector.tsx` — use ModelCombobox, remove Mode
+- `components/settings/ModelSelector.tsx` — DELETED
+- `App.tsx` — fix auth sync loop + Clear Chat button
+
+#### Verificacion
+
+- Backend: typecheck PASS, **252/252 tests PASS**
+- Frontend: typecheck PASS, build PASS (3.97s)
+- E2E manual: Anthropic streaming OK, OpenRouter models loading OK, mode pills OK
+
+#### Pendientes para Ciclo 10
+
+1. Firebase Auth (Google/GitHub OAuth)
+2. Dockerfile + Cloud Run deploy
+3. Vercel deploy for frontend
+4. E2E Playwright tests
+5. Code-split syntax-highlighter
+
+---
+
 *SYNAPTIC Protocol v3.0 STRICT — BITACORA Active*

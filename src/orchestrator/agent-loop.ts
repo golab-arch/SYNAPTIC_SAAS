@@ -5,6 +5,7 @@
  */
 
 import type { ILLMProvider, LLMMessage } from '../providers/types.js';
+import { createProvider } from '../providers/provider-factory.js';
 import type { IEnforcementEngine } from '../engines/enforcement/types.js';
 import type { ISAIEngine, FileContent } from '../engines/sai/types.js';
 import type { IIntelligenceEngine, BitacoraCycleEntry } from '../engines/intelligence/types.js';
@@ -44,6 +45,16 @@ export class AgentLoopService {
    */
   async *execute(request: OrchestrationRequest): AsyncGenerator<SSEEvent> {
     const startTime = Date.now();
+
+    // BYOK: create per-request provider if apiKey provided, else fall back to default
+    let llm: ILLMProvider = this.llmProvider;
+    if (request.provider.apiKey) {
+      try {
+        llm = createProvider(request.provider.providerId, request.provider.apiKey);
+      } catch {
+        // Unknown provider — fall back to injected default (e.g. mock in tests)
+      }
+    }
 
     try {
       // ── STEP 1: Increment cycle ──
@@ -105,7 +116,7 @@ export class AgentLoopService {
         let toolInputJson = '';
         const pendingToolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }> = [];
 
-        for await (const chunk of this.llmProvider.streamMessage({
+        for await (const chunk of llm.streamMessage({
           model: request.provider.model,
           messages,
           systemPrompt,
@@ -114,7 +125,7 @@ export class AgentLoopService {
         })) {
           if (chunk.type === 'text' && chunk.content) {
             fullResponse += chunk.content;
-            yield { event: 'message', data: chunk.content };
+            yield { event: 'message', data: { text: chunk.content } };
           } else if (chunk.type === 'tool_use_start') {
             // Finalize previous tool call if any
             if (currentToolName && currentToolId) {
@@ -173,7 +184,7 @@ export class AgentLoopService {
           this.config.maxRegenerationAttempts,
         );
 
-        const regenResponse = await this.llmProvider.sendMessage({
+        const regenResponse = await llm.sendMessage({
           model: request.provider.model,
           messages: [
             ...messages,
@@ -254,9 +265,11 @@ export class AgentLoopService {
         event: 'done',
         data: {
           cycle,
-          compliance: validationResult.score,
-          grade: validationResult.grade,
-          valid: validationResult.valid,
+          compliance: {
+            score: validationResult.score,
+            grade: validationResult.grade,
+            valid: validationResult.valid,
+          },
           regenerationAttempts: attempts - 1,
           saiAudit: saiResult,
           guidance: guidanceData,

@@ -6,7 +6,7 @@
 import type { FastifyInstance } from 'fastify';
 
 export async function healthRoutes(server: FastifyInstance): Promise<void> {
-  server.get('/health', async () => {
+  server.get('/health', { logLevel: 'warn' }, async () => {
     return {
       status: 'ok',
       timestamp: new Date().toISOString(),

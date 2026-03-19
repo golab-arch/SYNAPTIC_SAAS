@@ -219,9 +219,9 @@ describe('AgentLoopService Integration', () => {
     }
 
     const doneEvent = events.find((e) => e.event === 'done');
-    const data = doneEvent?.data as { compliance: number; valid: boolean; grade: string };
-    expect(data.valid).toBe(true);
-    expect(data.compliance).toBeGreaterThanOrEqual(70);
+    const data = doneEvent?.data as { compliance: { score: number; valid: boolean; grade: string } };
+    expect(data.compliance.valid).toBe(true);
+    expect(data.compliance.score).toBeGreaterThanOrEqual(70);
 
     // Should have no regeneration events (response was compliant)
     const regenEvents = events.filter((e) => e.event === 'regeneration');

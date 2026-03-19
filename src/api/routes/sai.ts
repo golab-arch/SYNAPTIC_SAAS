@@ -10,7 +10,7 @@ export async function saiRoutes(
   engine: ISAIEngine,
 ): Promise<void> {
 
-  server.get('/api/:tenantId/:projectId/sai/summary', async () => {
+  server.get('/api/:tenantId/:projectId/sai/summary', { logLevel: 'warn' }, async () => {
     return engine.getSummary();
   });
 

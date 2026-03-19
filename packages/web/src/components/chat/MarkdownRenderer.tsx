@@ -31,7 +31,9 @@ export function MarkdownRenderer({ content }: { content: string }) {
             return <td className="border border-gray-600 px-3 py-1">{children}</td>;
           },
         }}
-      />
+      >
+        {content}
+      </ReactMarkdown>
     </div>
   );
 }

@@ -37,12 +37,14 @@ export class SSEClient {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           taskId: params.taskId,
-          tenantScope: { tenantId: params.tenantId, projectId: params.projectId },
+          tenantId: params.tenantId,
+          projectId: params.projectId,
           prompt: params.prompt,
-          provider: { providerId: params.providerId ?? 'anthropic', model: params.modelId },
+          modelId: params.modelId,
+          providerId: params.providerId ?? 'anthropic',
           apiKey: params.apiKey,
           mode: params.mode ?? 'SYNAPTIC',
-          messages: params.history ?? [],
+          history: params.history ?? [],
         }),
         signal: this.abortController.signal,
       });

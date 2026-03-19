@@ -15,6 +15,7 @@ import { intelligenceRoutes } from './routes/intelligence.js';
 import { saiRoutes } from './routes/sai.js';
 import { guidanceRoutes } from './routes/guidance.js';
 import { keyRoutes } from './routes/keys.js';
+import { openrouterModelsRoute } from './routes/openrouter-models.js';
 
 export interface ServerDeps {
   agentLoop: AgentLoopService;
@@ -44,6 +45,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
   await server.register(async (s) => saiRoutes(s, deps.sai));
   await server.register(async (s) => guidanceRoutes(s, deps.guidance));
   await server.register(async (s) => keyRoutes(s, deps.keyManager));
+  await server.register(openrouterModelsRoute);
 
   return server;
 }
