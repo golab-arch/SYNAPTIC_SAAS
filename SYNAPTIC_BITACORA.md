@@ -708,4 +708,74 @@ Ciclo critico: los 5 motores que eran modulos aislados ahora son un sistema inte
 
 ---
 
+### Session 10 — OAuth + Tiers + Project CRUD + Landing Page
+
+**Fecha**: 2026-03-19
+**Fase**: PRODUCTION
+**Tipo**: Auth, user management, project lifecycle, product UI
+**Synaptic Strength**: 55%
+
+#### Tareas completadas
+
+| # | Tarea | Estado |
+|---|-------|--------|
+| 1 | Firebase Auth backend: verifyFirebaseToken, lazy admin init | DONE |
+| 2 | Auth middleware: Firebase tokens (prod) + dev/test bypass | DONE |
+| 3 | Auth config endpoint: GET /api/auth/config (public) | DONE |
+| 4 | User model: UserRecord, getOrCreateUser, tier system | DONE |
+| 5 | Tier limits: free (50 cycles/3 projects), pro, full | DONE |
+| 6 | Usage tracking: checkUsageLimit, incrementUsage (per month) | DONE |
+| 7 | Project CRUD: create, list, get, delete (in-memory, Firestore-ready) | DONE |
+| 8 | Project routes: POST/GET/DELETE /api/projects with auth + tier checks | DONE |
+| 9 | Firebase client SDK: initFirebase, Google/GitHub OAuth, onAuthChange | DONE |
+| 10 | Auth store: Firebase OAuth + dev mode bypass + token refresh | DONE |
+| 11 | Landing page: hero, features grid, Google/GitHub login, dev mode | DONE |
+| 12 | Dashboard: project list, new project modal, project cards | DONE |
+| 13 | App router: Landing -> Dashboard -> ChatView (state-based) | DONE |
+| 14 | ChatView: extracted from App with back-to-dashboard navigation | DONE |
+| 15 | Environment variables: .env.example for backend and frontend | DONE |
+| 16 | Old SetupPage removed (replaced by LandingPage) | DONE |
+| 17 | Auth middleware tests updated for new Firebase-based flow | DONE |
+
+#### Archivos creados/modificados
+
+**Backend (src/):**
+- `src/auth/types.ts` — rewritten: AuthenticatedUser, UserTier
+- `src/auth/firebase-auth.ts` — rewritten: verifyFirebaseToken, lazy admin init
+- `src/api/middleware/auth.ts` — rewritten: Firebase verify + dev/test bypass
+- `src/api/routes/auth.ts` — NEW: GET /api/auth/config
+- `src/api/routes/projects.ts` — NEW: CRUD endpoints
+- `src/api/server.ts` — added auth middleware hook + auth/project routes
+- `src/models/user.ts` — NEW: UserRecord, tiers, getOrCreateUser
+- `src/models/usage.ts` — NEW: checkUsageLimit, incrementUsage
+- `src/models/project.ts` — NEW: Project CRUD (in-memory)
+- `src/__tests__/middleware.test.ts` — updated for new auth flow
+
+**Frontend (packages/web/src/):**
+- `lib/firebase.ts` — NEW: Firebase client SDK wrapper
+- `store/auth-store.ts` — rewritten: Firebase OAuth + dev mode + persist
+- `components/landing/LandingPage.tsx` — NEW: hero + features + OAuth buttons
+- `components/dashboard/Dashboard.tsx` — NEW: project list + usage bar
+- `components/dashboard/ProjectCard.tsx` — NEW: project card with framework badge
+- `components/dashboard/NewProjectModal.tsx` — NEW: create project form
+- `components/auth/SetupPage.tsx` — DELETED (replaced by LandingPage)
+- `App.tsx` — rewritten: 3-view router (Landing/Dashboard/ChatView)
+- `.env.example` — NEW
+
+#### Verificacion
+
+- Backend: typecheck PASS, **252/252 tests PASS**
+- Frontend: typecheck PASS, build PASS (12.67s)
+
+#### Pendientes para Ciclo 11
+
+1. Firebase project setup (real Google Cloud project + OAuth config)
+2. Firestore adapters for user/usage/project models (replace in-memory)
+3. WebContainers integration for browser-based tool execution
+4. File explorer panel + Preview panel
+5. Stripe billing for pro/full tiers
+6. Dockerfile + Cloud Run deploy
+
+---
+
 *SYNAPTIC Protocol v3.0 STRICT — BITACORA Active*

@@ -1,53 +1,49 @@
 /**
- * Auth middleware — Bearer token verification.
- * Phase 1: simple API key auth with timing-safe comparison.
- * Phase 2: Firebase Auth token verification.
+ * Auth middleware — Firebase token verification (prod) + dev bypass.
  */
 
-import { createHash, timingSafeEqual } from 'node:crypto';
 import type { FastifyRequest, FastifyReply } from 'fastify';
+import { verifyFirebaseToken, extractBearerToken } from '../../auth/firebase-auth.js';
+import type { AuthenticatedUser } from '../../auth/types.js';
 
-// In-memory API key store (per-tenant)
-const apiKeys = new Map<string, { tenantId: string; hashedKey: string }>();
+// Extend FastifyRequest with user
+declare module 'fastify' {
+  interface FastifyRequest {
+    user?: AuthenticatedUser;
+  }
+}
 
-/**
- * Fastify preHandler hook for authentication.
- * Skips /health endpoint.
- */
+const PUBLIC_PATHS = ['/health', '/api/auth/config', '/api/openrouter/models'];
+
 export async function authMiddleware(
   request: FastifyRequest,
   reply: FastifyReply,
 ): Promise<void> {
-  // Skip health checks
-  if (request.url === '/health') return;
+  // Skip public routes
+  if (PUBLIC_PATHS.some((p) => request.url.startsWith(p))) return;
 
-  // Dev mode bypass
-  if (process.env['NODE_ENV'] === 'development' && process.env['SKIP_AUTH'] === 'true') {
+  // Dev/test mode bypass
+  const env = process.env['NODE_ENV'];
+  if ((env === 'development' || env === 'test') && process.env['SKIP_AUTH'] !== 'false') {
+    request.user = {
+      uid: 'dev-user',
+      email: 'dev@synaptic.dev',
+      displayName: 'Dev User',
+      photoURL: null,
+      provider: 'development',
+      tier: 'free',
+    };
     return;
   }
 
-  const authHeader = request.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) {
-    return reply.status(401).send({ error: 'Missing Authorization header' });
+  const token = extractBearerToken(request.headers.authorization);
+  if (!token) {
+    return reply.status(401).send({ error: 'Missing authorization' });
   }
 
-  const token = authHeader.slice(7);
-  const hashedToken = createHash('sha256').update(token).digest();
-
-  for (const [, keyData] of apiKeys) {
-    const expected = Buffer.from(keyData.hashedKey, 'hex');
-    if (expected.length === hashedToken.length && timingSafeEqual(expected, hashedToken)) {
-      return; // Authenticated
-    }
+  try {
+    request.user = await verifyFirebaseToken(token);
+  } catch {
+    return reply.status(401).send({ error: 'Invalid token' });
   }
-
-  return reply.status(401).send({ error: 'Invalid API key' });
-}
-
-/**
- * Register an API key for authentication (dev/testing).
- */
-export function registerApiKey(key: string, tenantId: string): void {
-  const hashedKey = createHash('sha256').update(key).digest('hex');
-  apiKeys.set(hashedKey, { tenantId, hashedKey });
 }
