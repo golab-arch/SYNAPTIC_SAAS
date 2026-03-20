@@ -22,9 +22,10 @@ export async function authMiddleware(
   // Skip public routes
   if (PUBLIC_PATHS.some((p) => request.url.startsWith(p))) return;
 
-  // Dev/test mode bypass
+  // Dev/test mode bypass (NODE_ENV undefined = dev by default)
   const env = process.env['NODE_ENV'];
-  if ((env === 'development' || env === 'test') && process.env['SKIP_AUTH'] !== 'false') {
+  const isDev = !env || env === 'development' || env === 'test';
+  if (isDev && process.env['SKIP_AUTH'] !== 'false') {
     request.user = {
       uid: 'dev-user',
       email: 'dev@synaptic.dev',

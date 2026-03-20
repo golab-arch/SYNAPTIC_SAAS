@@ -11,13 +11,13 @@ export type UserTier = 'free' | 'pro' | 'full';
 interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
+  firebaseAvailable: boolean;
   uid: string | null;
   email: string | null;
   displayName: string | null;
   photoURL: string | null;
   tier: UserTier;
   idToken: string | null;
-  // Dev mode fields (no Firebase)
   devMode: boolean;
 
   initialize: () => Promise<void>;
@@ -33,6 +33,7 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       isAuthenticated: false,
       isLoading: true,
+      firebaseAvailable: false,
       uid: null,
       email: null,
       displayName: null,
@@ -42,39 +43,38 @@ export const useAuthStore = create<AuthState>()(
       devMode: false,
 
       initialize: async () => {
-        // If already authenticated from persisted state (dev mode), skip Firebase
+        // If already authenticated from persisted dev mode, just stop loading
         if (get().isAuthenticated && get().devMode) {
           set({ isLoading: false });
           return;
         }
 
-        await initFirebase();
-        const unsub = onAuthChange(async (user) => {
-          if (user) {
-            const token = await user.getIdToken();
-            set({
-              isAuthenticated: true,
-              isLoading: false,
-              uid: user.uid,
-              email: user.email,
-              displayName: user.displayName,
-              photoURL: user.photoURL,
-              idToken: token,
-              devMode: false,
-            });
-          } else if (!get().devMode) {
-            set({ isAuthenticated: false, isLoading: false, uid: null, email: null, displayName: null, photoURL: null, idToken: null });
-          }
-        });
+        try {
+          await initFirebase();
+          set({ firebaseAvailable: true });
 
-        // If no Firebase auth listener fired after 2s, stop loading
-        setTimeout(() => {
-          if (get().isLoading && !get().isAuthenticated) {
-            set({ isLoading: false });
-          }
-        }, 2000);
+          onAuthChange(async (user) => {
+            if (user) {
+              const token = await user.getIdToken();
+              set({
+                isAuthenticated: true, isLoading: false,
+                uid: user.uid, email: user.email,
+                displayName: user.displayName, photoURL: user.photoURL,
+                idToken: token, devMode: false,
+              });
+            } else if (!get().devMode) {
+              set({ isAuthenticated: false, isLoading: false, uid: null, email: null, displayName: null, photoURL: null, idToken: null });
+            }
+          });
 
-        void unsub; // keep subscription alive
+          // Fallback timeout if onAuthStateChanged doesn't fire
+          setTimeout(() => {
+            if (get().isLoading) set({ isLoading: false });
+          }, 2000);
+        } catch {
+          // Firebase not available — dev mode only
+          set({ isLoading: false, firebaseAvailable: false });
+        }
       },
 
       loginWithGoogle: async () => {
@@ -91,23 +91,17 @@ export const useAuthStore = create<AuthState>()(
 
       loginDev: (name?: string) => {
         set({
-          isAuthenticated: true,
-          isLoading: false,
-          uid: 'dev-user',
-          email: 'dev@synaptic.dev',
-          displayName: name || 'Dev User',
-          photoURL: null,
-          tier: 'free',
-          idToken: 'dev-token',
-          devMode: true,
+          isAuthenticated: true, isLoading: false,
+          uid: 'dev-user', email: 'dev@synaptic.dev',
+          displayName: name || 'Developer', photoURL: null,
+          tier: 'free', idToken: 'dev-token', devMode: true,
         });
       },
 
       logout: async () => {
         try { await signOut(); } catch { /* ignore */ }
         set({
-          isAuthenticated: false,
-          isLoading: false,
+          isAuthenticated: false, isLoading: false,
           uid: null, email: null, displayName: null, photoURL: null,
           idToken: null, devMode: false,
         });
@@ -123,14 +117,9 @@ export const useAuthStore = create<AuthState>()(
     {
       name: 'synaptic-auth',
       partialize: (s) => ({
-        isAuthenticated: s.isAuthenticated,
-        uid: s.uid,
-        email: s.email,
-        displayName: s.displayName,
-        photoURL: s.photoURL,
-        tier: s.tier,
-        devMode: s.devMode,
-        idToken: s.devMode ? s.idToken : null,
+        isAuthenticated: s.isAuthenticated, uid: s.uid, email: s.email,
+        displayName: s.displayName, photoURL: s.photoURL, tier: s.tier,
+        devMode: s.devMode, idToken: s.devMode ? s.idToken : null,
       }),
     },
   ),

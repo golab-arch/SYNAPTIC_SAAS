@@ -1,5 +1,6 @@
 /**
  * Firebase client SDK — auth with Google/GitHub OAuth.
+ * Throws if Firebase config is not available (handled by auth store).
  */
 
 import { initializeApp, type FirebaseApp } from 'firebase/app';
@@ -20,19 +21,19 @@ let auth: Auth | null = null;
 export async function initFirebase(): Promise<void> {
   if (app) return;
   const apiBase = import.meta.env.VITE_API_URL ?? '';
-  try {
-    const res = await fetch(`${apiBase}/api/auth/config`);
-    const config = await res.json();
-    if (!config.apiKey) {
-      // Dev mode — no Firebase config available
-      console.warn('Firebase config not available — running in dev mode');
-      return;
-    }
-    app = initializeApp(config);
-    auth = getAuth(app);
-  } catch {
-    console.warn('Failed to initialize Firebase — backend may be down');
-  }
+
+  const res = await fetch(`${apiBase}/api/auth/config`);
+  if (!res.ok) throw new Error('Auth config endpoint failed');
+
+  const config = await res.json();
+  if (!config.apiKey) throw new Error('Firebase not configured');
+
+  app = initializeApp(config);
+  auth = getAuth(app);
+}
+
+export function isFirebaseReady(): boolean {
+  return auth !== null;
 }
 
 export function getFirebaseAuth(): Auth | null {
@@ -63,9 +64,6 @@ export async function getIdToken(): Promise<string | null> {
 }
 
 export function onAuthChange(callback: (user: User | null) => void): () => void {
-  if (!auth) {
-    // Dev mode — no Firebase, no auth state changes
-    return () => {};
-  }
+  if (!auth) return () => {};
   return onAuthStateChanged(auth, callback);
 }

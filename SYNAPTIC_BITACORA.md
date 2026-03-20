@@ -778,4 +778,44 @@ Ciclo critico: los 5 motores que eran modulos aislados ahora son un sistema inte
 
 ---
 
+### Session 10b — Hotfix: Dev Mode Auth Bypass
+
+**Fecha**: 2026-03-20
+**Fase**: HOTFIX
+**Tipo**: Auth middleware fix for development mode
+**Synaptic Strength**: 50%
+
+#### Problema
+
+El auth middleware en `src/api/middleware/auth.ts` requería `NODE_ENV=development` para
+activar el bypass en dev mode. Pero `tsx watch` (usado en `npm run dev`) NO establece
+`NODE_ENV`, dejándolo como `undefined`. Resultado: todas las requests a `/api/projects`
+y otros endpoints protegidos retornaban 401 Unauthorized en desarrollo.
+
+#### Fix aplicado
+
+- **auth.ts L27**: Cambió `env === 'development' || env === 'test'` por
+  `!env || env === 'development' || env === 'test'` — NODE_ENV undefined ahora
+  se trata como dev mode
+- **firebase.ts**: initFirebase lanza error limpiamente si config vacío (dev sin Firebase)
+- **auth-store.ts**: initialize() maneja Firebase failure → `isLoading: false`
+- **LandingPage.tsx**: Muestra "Continue in Dev Mode" cuando Firebase no disponible
+
+#### Archivos modificados
+
+| Archivo | Cambio |
+|---------|--------|
+| `src/api/middleware/auth.ts` | Dev bypass con NODE_ENV undefined |
+| `packages/web/src/lib/firebase.ts` | Graceful failure sin Firebase config |
+| `packages/web/src/store/auth-store.ts` | Handle init failure + loginAsDev |
+| `packages/web/src/components/landing/LandingPage.tsx` | Dev mode login button |
+
+#### Verificacion
+
+- Backend: typecheck PASS, **252/252 tests PASS**
+- Frontend: typecheck PASS, build PASS
+- Dev flow: Landing → Dev Mode → Dashboard → New Project → ChatView ✅
+
+---
+
 *SYNAPTIC Protocol v3.0 STRICT — BITACORA Active*
