@@ -16,24 +16,18 @@ interface SettingsState {
   toggleDarkMode: () => void;
 }
 
-const MODEL_DEFAULTS: Record<string, string> = {
-  anthropic: 'claude-sonnet-4-6',
-  openai: 'gpt-4o',
-  gemini: 'gemini-2.0-flash',
-  openrouter: 'anthropic/claude-sonnet-4',
-};
-
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
       providerId: 'anthropic',
-      modelId: 'claude-sonnet-4-6',
+      modelId: '',
       apiKey: '',
       apiKeyValid: false,
       mode: 'SYNAPTIC',
       darkMode: true,
 
-      setProvider: (providerId) => set({ providerId, modelId: MODEL_DEFAULTS[providerId] ?? '' }),
+      // Clear modelId on provider change — auto-selected by ModelCombobox on load
+      setProvider: (providerId) => set({ providerId, modelId: '' }),
       setModel: (modelId) => set({ modelId }),
       setApiKey: (key, valid) => set({ apiKey: key, apiKeyValid: valid }),
       setMode: (mode) => set({ mode }),

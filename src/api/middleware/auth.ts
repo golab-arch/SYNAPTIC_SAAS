@@ -13,7 +13,7 @@ declare module 'fastify' {
   }
 }
 
-const PUBLIC_PATHS = ['/health', '/api/auth/config', '/api/openrouter/models'];
+const PUBLIC_PATHS = ['/health', '/api/auth/config', '/api/providers'];
 
 export async function authMiddleware(
   request: FastifyRequest,

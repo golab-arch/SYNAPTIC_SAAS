@@ -17,7 +17,7 @@ import { intelligenceRoutes } from './routes/intelligence.js';
 import { saiRoutes } from './routes/sai.js';
 import { guidanceRoutes } from './routes/guidance.js';
 import { keyRoutes } from './routes/keys.js';
-import { openrouterModelsRoute } from './routes/openrouter-models.js';
+import { providerModelsRoute } from './routes/provider-models.js';
 import { projectRoutes } from './routes/projects.js';
 
 export interface ServerDeps {
@@ -39,7 +39,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
   // Public routes (before auth)
   await server.register(healthRoutes);
   await server.register(authRoutes);
-  await server.register(openrouterModelsRoute);
+  await server.register(providerModelsRoute);
 
   // Auth middleware
   server.addHook('preHandler', authMiddleware);

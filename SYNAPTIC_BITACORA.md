@@ -818,4 +818,67 @@ y otros endpoints protegidos retornaban 401 Unauthorized en desarrollo.
 
 ---
 
+### Session 11 — Ciclo 11: Dynamic Model Listing para 4 Providers
+
+**Fecha**: 2026-03-21
+**Fase**: PRODUCTION
+**Tipo**: Feature — Dynamic model listing con pricing, context windows, capabilities
+**Synaptic Strength**: 55%
+
+#### Resumen
+
+Propagación del combobox dinámico de OpenRouter a los 4 providers. Cada provider
+ahora lista sus modelos via API real, con pricing, context window, y capability badges.
+
+#### Investigacion previa
+
+| Provider | API Endpoint | Pricing en API | Context en API | Capabilities en API |
+|----------|-------------|----------------|----------------|---------------------|
+| Anthropic | `GET /v1/models` | No | Si (max_input_tokens) | Si (image, thinking, pdf) |
+| OpenAI | `GET /v1/models` | No | No | No |
+| Gemini | `GET /v1beta/models` | No | Si (inputTokenLimit) | Parcial (methods) |
+| OpenRouter | `GET /api/v1/models` | Si | Si | Si |
+
+Estrategia: API dinamica + enriquecimiento con pricing estatico + fallback.
+
+#### Archivos creados
+
+| Archivo | Proposito |
+|---------|-----------|
+| `src/providers/pricing.ts` | Tabla estatica de pricing USD/Mtok + OpenAI model info |
+| `src/providers/model-listing.ts` | 4 adaptadores + cache 5min + fallback estatico |
+| `src/api/routes/provider-models.ts` | `GET /api/providers/:providerId/models` |
+| `packages/web/src/hooks/useProviderModels.ts` | Hook generico para cualquier provider |
+
+#### Archivos modificados
+
+| Archivo | Cambio |
+|---------|--------|
+| `src/api/server.ts` | Reemplazo openrouterModelsRoute → providerModelsRoute |
+| `src/api/middleware/auth.ts` | PUBLIC_PATHS: `/api/providers` |
+| `packages/web/src/components/settings/ModelCombobox.tsx` | Combobox universal (no mas branch OpenRouter) |
+| `packages/web/src/store/settings-store.ts` | modelId='' on provider change, auto-select |
+
+#### Archivos eliminados
+
+| Archivo | Razon |
+|---------|-------|
+| `src/api/routes/openrouter-models.ts` | Reemplazado por endpoint generico |
+| `packages/web/src/hooks/useOpenRouterModels.ts` | Reemplazado por useProviderModels |
+
+#### Verificacion
+
+- Backend: typecheck PASS, **252/252 tests PASS**
+- Frontend: typecheck PASS, build PASS
+
+#### Pendientes para Ciclo 12
+
+1. WebContainers para tool execution en browser
+2. File explorer panel + Preview panel
+3. Project file persistence
+4. Stripe billing integration
+5. Deploy: Docker + Cloud Run
+
+---
+
 *SYNAPTIC Protocol v3.0 STRICT — BITACORA Active*
