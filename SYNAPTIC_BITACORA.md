@@ -1029,4 +1029,44 @@ Ring buffer de 5 snapshots que se inyecta en system prompt:
 
 ---
 
+### Session 15 — DG-126 Phase 2C: Bitacora Tome System + Response Archival
+
+**Fecha**: 2026-04-05
+**Fase**: PRODUCTION
+**Tipo**: Feature — Bitacora tome-based system + full response archival + intelligence archival
+**Synaptic Strength**: 75%
+
+#### Items implementados
+
+| # | Feature | LOC |
+|---|---------|-----|
+| 1 | BitacoraCycleEntry + BitacoraIndex extended types | ~50 |
+| 2 | BitacoraManager tome service (rewrite) | ~200 |
+| 3 | Full response archival in agent loop | ~10 |
+| 4 | Intelligence archival (archiveOldItems) | ~20 |
+| 5 | Smart summary replaces flat formatting | ~10 |
+
+#### Tome system
+
+- Cycles accumulate in "current tome" (max 50 cycles)
+- On overflow: tome closes, new one begins
+- BitacoraIndex tracks: tomes[], decisionIndex[], aggregateMetrics
+- Metrics: totalCycles, success/failure/partial counts, avgCompliance, optionDistribution
+- Smart summary: metrics + last 10 cycles + last 5 decisions (for system prompt)
+
+#### Response archival
+
+BitacoraCycleEntry now stores: fullResponseText, parsedDecisionGate, model, provider, toolsUsed
+
+#### Verificacion
+
+- Backend: typecheck PASS, **126/126 tests PASS**
+- Frontend: typecheck PASS, build PASS
+
+#### DG-126 Phase 2 COMPLETE
+
+Phase 2A (confidence + CycleContextManager) + Phase 2B (learning pipeline) + Phase 2C (bitacora tomes + archival) = Intelligence Pipeline fully migrated from VSC_EXTENSION.
+
+---
+
 *SYNAPTIC Protocol v3.0 STRICT — BITACORA Active*

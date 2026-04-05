@@ -110,20 +110,56 @@ export interface BitacoraCycleEntry {
     readonly grade: string;
     readonly findingsCount: number;
   };
+  // DG-126 Phase 2C: Full response archival
+  readonly fullResponseText?: string;
+  readonly parsedDecisionGate?: {
+    readonly detected: boolean;
+    readonly options: ReadonlyArray<{ id: string; title: string }>;
+  };
+  readonly model?: string;
+  readonly provider?: string;
+  readonly toolsUsed?: readonly string[];
 }
 
+// ─── Bitacora Index (Tome-based, DG-126 Phase 2C) ─────────────
+
 export interface BitacoraIndex {
-  readonly fragments: readonly BitacoraFragment[];
+  readonly version: string;
+  readonly projectId: string;
   readonly totalCycles: number;
+  readonly currentTomeId: string;
+  readonly cyclesPerTome: number;
+  readonly tomes: readonly TomeEntry[];
+  readonly decisionIndex: readonly DecisionIndexEntry[];
+  readonly metrics: BitacoraAggregateMetrics;
   readonly lastUpdated: string;
 }
 
-export interface BitacoraFragment {
+export interface TomeEntry {
   readonly id: string;
   readonly startCycle: number;
   readonly endCycle: number | null;
-  readonly lines: number;
+  readonly cycleCount: number;
   readonly closed: boolean;
+  readonly createdAt: string;
+  readonly closedAt?: string;
+}
+
+export interface DecisionIndexEntry {
+  readonly cycle: number;
+  readonly optionSelected: string;
+  readonly title: string;
+  readonly timestamp: string;
+}
+
+export interface BitacoraAggregateMetrics {
+  readonly totalCycles: number;
+  readonly successCount: number;
+  readonly failureCount: number;
+  readonly partialCount: number;
+  readonly avgComplianceScore: number;
+  readonly decisionCount: number;
+  readonly optionDistribution: Record<string, number>;
 }
 
 // ─── Context ────────────────────────────────────────────────────
@@ -232,4 +268,8 @@ export interface IIntelligenceEngine extends IEngine {
   incrementCycle(): Promise<number>;
   /** DG-126: peek at next cycle number without committing it */
   peekNextCycle(): Promise<number>;
+  /** DG-126 Phase 2C: Smart bitacora summary (metrics + recent + decisions) */
+  getSmartBitacoraSummary(): Promise<string>;
+  /** DG-126 Phase 2C: Archive old items to prevent unbounded growth */
+  archiveOldItems(currentCycle: number): Promise<number>;
 }

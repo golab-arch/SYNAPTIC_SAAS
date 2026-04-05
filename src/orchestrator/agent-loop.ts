@@ -84,8 +84,7 @@ export class AgentLoopService {
 
       // ── STEP 3: Build system prompt (Protocol + Intelligence + Director files) ──
       const intelligenceSummary = await this.intelligenceEngine.getIntelligenceSummary();
-      const recentBitacora = await this.intelligenceEngine.getRecentBitacora(15);
-      const bitacoraHistory = formatBitacoraForPrompt(recentBitacora);
+      const bitacoraHistory = await this.intelligenceEngine.getSmartBitacoraSummary();
 
       // Load director files from context documents
       const contextDocs = await this.intelligenceEngine.getContextDocuments();
@@ -283,8 +282,22 @@ export class AgentLoopService {
         lessonsLearned: [],
         synapticStrength: Math.min(cycle * 3, 100),
         saiAudit: saiResult ? { score: saiResult.score, grade: saiResult.grade, findingsCount: saiResult.findings } : undefined,
+        // DG-126 Phase 2C: Full response archival
+        fullResponseText: fullResponse,
+        parsedDecisionGate: (() => {
+          const dg = parseDecisionGateFromResponse(fullResponse);
+          return dg.detected ? dg : undefined;
+        })(),
+        model: request.provider.model,
+        provider: request.provider.providerId,
+        toolsUsed: toolActions.map((a) => a.toolName).filter((v, i, arr) => arr.indexOf(v) === i),
       };
       await this.intelligenceEngine.appendBitacora(bitacoraEntry);
+
+      // ── STEP 8b: Intelligence archival (non-critical, fire-and-forget) ──
+      if (!hadProviderError && !enforcementGradeF) {
+        this.intelligenceEngine.archiveOldItems(tentativeCycle).catch(() => {});
+      }
 
       if (!hadProviderError && !enforcementGradeF) {
         await this.intelligenceEngine.updateSession({
@@ -426,34 +439,7 @@ export class AgentLoopService {
 
 // ─── Helpers (pure functions, no class needed) ────────────────────
 
-/**
- * Format bitacora entries for system prompt injection.
- */
-export function formatBitacoraForPrompt(entries: BitacoraCycleEntry[]): string {
-  if (entries.length === 0) return 'No previous cycles recorded.';
-
-  const lines: string[] = [];
-  const latestCycle = entries[0]?.cycleId ?? 0;
-  if (latestCycle > entries.length) {
-    lines.push(`> Showing last ${entries.length} of ~${latestCycle} cycles.\n`);
-  }
-
-  for (const entry of entries) {
-    lines.push(`**Cycle ${entry.cycleId}** (${entry.timestamp}): ${entry.result}`);
-    if (entry.promptOriginal) {
-      lines.push(`  Prompt: ${entry.promptOriginal.substring(0, 150)}...`);
-    }
-    if (entry.metrics) {
-      lines.push(`  Compliance: ${entry.metrics.protocolCompliance}/100`);
-    }
-    if (entry.saiAudit) {
-      lines.push(`  SAI: ${entry.saiAudit.score}/100 (${entry.saiAudit.findingsCount} findings)`);
-    }
-    lines.push('');
-  }
-
-  return lines.join('\n');
-}
+// formatBitacoraForPrompt removed — replaced by BitacoraManager.getSmartSummary() (DG-126 Phase 2C)
 
 /**
  * Extract director files from context documents.

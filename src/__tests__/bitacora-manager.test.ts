@@ -1,19 +1,19 @@
 /**
- * BitacoraManager tests.
+ * BitacoraManager tests — tome-based system (DG-126 Phase 2C).
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { BitacoraManager, formatBitacoraEntries, BITACORA_RECENT_FOR_PROMPT } from '../engines/intelligence/bitacora-manager.js';
+import { BitacoraManager } from '../engines/intelligence/bitacora-manager.js';
 import { InMemoryIntelligenceStorage } from '../storage/memory/memory-intelligence.js';
 import type { BitacoraCycleEntry } from '../engines/intelligence/types.js';
 
-function makeEntry(cycleId: number): BitacoraCycleEntry {
+function makeEntry(cycleId: number, result: BitacoraCycleEntry['result'] = 'SUCCESS'): BitacoraCycleEntry {
   return {
     cycleId,
     traceId: `trace-${cycleId}`,
     timestamp: new Date().toISOString(),
     phase: 'execution',
-    result: 'SUCCESS',
+    result,
     duration: '100ms',
     promptOriginal: `Prompt for cycle ${cycleId}`,
     decisionGate: null,
@@ -46,49 +46,61 @@ describe('BitacoraManager', () => {
     expect(entries[0]!.cycleId).toBe(1);
   });
 
-  it('should return only last N entries for prompt', async () => {
-    // Seed 30 entries
+  it('should return only last N entries', async () => {
     for (let i = 1; i <= 30; i++) {
       await manager.appendEntry(makeEntry(i));
     }
-
-    const entries = await manager.getRecentEntries();
-    expect(entries.length).toBeLessThanOrEqual(BITACORA_RECENT_FOR_PROMPT);
+    const entries = await manager.getRecentEntries(15);
+    expect(entries.length).toBeLessThanOrEqual(15);
   });
 
-  it('should return entries in order', async () => {
+  it('should get index with tome structure', async () => {
+    await manager.appendEntry(makeEntry(1));
+    const index = await manager.getIndex();
+    expect(index.version).toBe('2.0');
+    expect(index.totalCycles).toBe(1);
+    expect(index.tomes.length).toBeGreaterThanOrEqual(1);
+    expect(index.currentTomeId).toBe('tome-001');
+  });
+
+  it('should update aggregate metrics', async () => {
+    await manager.appendEntry(makeEntry(1, 'SUCCESS'));
+    await manager.appendEntry(makeEntry(2, 'PARTIAL'));
+    await manager.appendEntry(makeEntry(3, 'ERROR'));
+    const index = await manager.getIndex();
+    expect(index.metrics.totalCycles).toBe(3);
+    expect(index.metrics.successCount).toBe(1);
+    expect(index.metrics.partialCount).toBe(1);
+    expect(index.metrics.failureCount).toBe(1);
+  });
+
+  it('should track decisions in index', async () => {
+    const entry = makeEntry(1);
+    const withDecision = {
+      ...entry,
+      optionSelected: { option: 'A', title: 'Use TypeScript' },
+    };
+    await manager.appendEntry(withDecision);
+    const index = await manager.getIndex();
+    expect(index.decisionIndex).toHaveLength(1);
+    expect(index.decisionIndex[0]!.optionSelected).toBe('A');
+    expect(index.metrics.decisionCount).toBe(1);
+    expect(index.metrics.optionDistribution['A']).toBe(1);
+  });
+
+  it('should generate smart summary', async () => {
     for (let i = 1; i <= 5; i++) {
       await manager.appendEntry(makeEntry(i));
     }
-    const entries = await manager.getRecentEntries(5);
-    expect(entries).toHaveLength(5);
+    const summary = await manager.getSmartSummary();
+    expect(summary).toContain('BITACORA HISTORY');
+    expect(summary).toContain('Total cycles: 5');
+    expect(summary).toContain('Success rate: 100%');
+    expect(summary).toContain('Cycle 1');
   });
 
-  it('should get bitacora index', async () => {
-    await manager.appendEntry(makeEntry(1));
-    const index = await manager.getIndex();
-    expect(index.totalCycles).toBeGreaterThanOrEqual(1);
-    expect(index.fragments.length).toBeGreaterThanOrEqual(1);
-  });
-});
-
-describe('formatBitacoraEntries', () => {
-  it('should format entries for prompt injection', () => {
-    const entries = [makeEntry(1), makeEntry(2)];
-    const formatted = formatBitacoraEntries(entries);
-    expect(formatted).toContain('Cycle 1');
-    expect(formatted).toContain('Cycle 2');
-    expect(formatted).toContain('SUCCESS');
-  });
-
-  it('should return message for empty entries', () => {
-    const formatted = formatBitacoraEntries([]);
-    expect(formatted).toContain('No previous cycles');
-  });
-
-  it('should show truncation header when cycles exceed entries', () => {
-    const entries = [makeEntry(50)]; // cycleId 50 but only 1 entry
-    const formatted = formatBitacoraEntries(entries);
-    expect(formatted).toContain('Showing last 1');
+  it('should return empty summary message for no cycles', async () => {
+    const summary = await manager.getSmartSummary();
+    expect(summary).toContain('Total cycles: 0');
   });
 });

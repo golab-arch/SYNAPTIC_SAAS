@@ -66,8 +66,14 @@ export class FirestoreIntelligenceStorage implements IIntelligenceStorage {
     const snap = await this.ref(tenantId, projectId).collection('bitacora').count().get();
     const total = snap.data().count;
     return {
-      fragments: [{ id: '001', startCycle: 1, endCycle: null, lines: total * 20, closed: false }],
+      version: '2.0',
+      projectId,
       totalCycles: total,
+      currentTomeId: 'tome-001',
+      cyclesPerTome: 50,
+      tomes: [{ id: 'tome-001', startCycle: 1, endCycle: null, cycleCount: total, closed: false, createdAt: new Date().toISOString() }],
+      decisionIndex: [],
+      metrics: { totalCycles: total, successCount: 0, failureCount: 0, partialCount: 0, avgComplianceScore: 0, decisionCount: 0, optionDistribution: {} },
       lastUpdated: new Date().toISOString(),
     };
   }

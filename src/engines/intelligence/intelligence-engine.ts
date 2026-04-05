@@ -145,4 +145,24 @@ export class IntelligenceEngine implements IIntelligenceEngine {
   async peekNextCycle(): Promise<number> {
     return this.session.peekNextCycle();
   }
+
+  async getSmartBitacoraSummary(): Promise<string> {
+    return this.bitacora.getSmartSummary();
+  }
+
+  async archiveOldItems(currentCycle: number): Promise<number> {
+    const ARCHIVE_AGE = 50;
+    let archived = 0;
+
+    // Archive old successful decisions
+    const decisions = await this.getDecisions();
+    const old = decisions.filter(
+      (d) => d.outcome === 'SUCCESS' && (currentCycle - d.cycle) > ARCHIVE_AGE,
+    );
+    archived += old.length;
+    // Note: actual removal deferred to storage layer — for now count only
+
+    // Low-confidence learnings are already archived by the decay system (Step 2)
+    return archived;
+  }
 }

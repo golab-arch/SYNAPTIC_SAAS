@@ -95,16 +95,29 @@ export class InMemoryIntelligenceStorage implements IIntelligenceStorage {
     const k = this.key(tenantId, projectId);
     const list = this.bitacora.get(k) ?? [];
     return {
-      fragments: [
-        {
-          id: '001',
-          startCycle: list.length > 0 ? list[0]!.cycleId : 1,
-          endCycle: null,
-          lines: list.length * 20, // rough estimate
-          closed: false,
-        },
-      ],
+      version: '2.0',
+      projectId,
       totalCycles: list.length,
+      currentTomeId: 'tome-001',
+      cyclesPerTome: 50,
+      tomes: [{
+        id: 'tome-001',
+        startCycle: list.length > 0 ? list[0]!.cycleId : 1,
+        endCycle: list.length > 0 ? list[list.length - 1]!.cycleId : null,
+        cycleCount: list.length,
+        closed: false,
+        createdAt: new Date().toISOString(),
+      }],
+      decisionIndex: [],
+      metrics: {
+        totalCycles: list.length,
+        successCount: list.filter((e) => e.result === 'SUCCESS').length,
+        failureCount: list.filter((e) => e.result === 'FAILURE' || e.result === 'ERROR').length,
+        partialCount: list.filter((e) => e.result === 'PARTIAL').length,
+        avgComplianceScore: list.length > 0 ? list.reduce((s, e) => s + e.metrics.protocolCompliance, 0) / list.length : 0,
+        decisionCount: 0,
+        optionDistribution: {},
+      },
       lastUpdated: new Date().toISOString(),
     };
   }
