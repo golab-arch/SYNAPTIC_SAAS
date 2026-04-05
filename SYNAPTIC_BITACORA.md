@@ -1130,4 +1130,48 @@ Phase 3A (ProviderErrorModal + Markdown + ActivityLog) + Phase 3B (LearningsView
 
 ---
 
+### Session 18 — DG-126 Phase 4: Advanced Intelligence (FINAL)
+
+**Fecha**: 2026-04-05
+**Fase**: PRODUCTION — DG-126 COMPLETE
+**Tipo**: Feature — S4 enrichment + enforcement patterns + D4 Step 4 + execution detection
+**Synaptic Strength**: 90%
+
+#### Items implementados
+
+| # | Feature | Archivo(s) | LOC |
+|---|---------|-----------|-----|
+| 1 | Execution detection | prompt-wrapper.ts | ~30 |
+| 2 | D4 Step 4 LLM micro-call | dg-selection-detector.ts, agent-loop.ts | ~50 |
+| 3 | Enforcement pattern analysis | NEW enforcement-tracker.ts, agent-loop.ts | ~80 |
+| 4 | S4 semantic enrichment | NEW s4-enrichment.ts, agent-loop.ts | ~110 |
+
+#### Detalles
+
+- **Execution detection**: `isExecutionCommand()` detects "ejecuta/implement/proceed/ahora" in prompts, switches to EXECUTE NOW mode (skip Decision Gates, invoke tools directly)
+- **D4 Step 4**: `detectDGSelectionAsync()` with LLM micro-call fallback using cheapest model per provider (haiku/gpt-4o-mini/gemini-flash), 3s timeout
+- **Enforcement tracker**: Records compliance per cycle, every 4 cycles generates trend + model performance learnings
+- **S4 enrichment**: Every 5 cycles sends learnings + cycle summaries to LLM for ENRICH/MERGE/NEW actions, 10s timeout, non-blocking
+
+#### DG-126 COMPLETE — ALL 4 PHASES DELIVERED
+
+| Phase | Description | Commit |
+|-------|-------------|--------|
+| Phase 1 | Provider errors, graduated enforcement, compliance tiers, user protection | 3ffc6dc |
+| Phase 2A | Confidence alignment + CycleContextManager | b4a4cb1 |
+| Phase 2B | Learning pipeline (6 detectors + D4 cascade steps 1-3) | bd01af2 |
+| Phase 2C | Bitacora tome system + response archival | 2896ebe |
+| Phase 3A | ProviderErrorModal + MarkdownRenderer + ActivityLog | 7d52b7e |
+| Phase 3B | LearningsViewer actions + ContradictionModal | 64f7fc1 |
+| Phase 4 | S4 enrichment + enforcement patterns + D4 Step 4 + execution detection | (this commit) |
+
+**Total DG-126**: 7 commits, ~2,000 LOC across backend + frontend. Cross-pollination migration from VSC_EXTENSION v0.5.1 complete.
+
+#### Verificacion
+
+- Backend: typecheck PASS, **126/126 tests PASS**
+- Frontend: typecheck PASS, build PASS
+
+---
+
 *SYNAPTIC Protocol v3.0 STRICT — BITACORA Active*

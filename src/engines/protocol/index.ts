@@ -5,6 +5,7 @@
 export { ProtocolEngine } from './protocol-engine.js';
 export { getInjectionMode } from './protocol-loader.js';
 export { truncateToTokenBudget } from './prompt-builder.js';
+export { isExecutionCommand } from './prompt-wrapper.js';
 export { estimateTokenUsage, estimateTokens } from './token-estimator.js';
 export {
   DEFAULT_TOKEN_BUDGETS,

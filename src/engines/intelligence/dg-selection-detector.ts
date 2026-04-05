@@ -103,6 +103,56 @@ export function detectDGSelection(
     }
   }
 
-  // Step 4 (LLM micro-call) deferred to Phase 4
+  // Step 4 (LLM micro-call) — implemented in detectDGSelectionAsync
+  return null;
+}
+
+// ─── D4 Step 4: LLM Micro-Call (DG-126 Phase 4) ────────────────
+
+/** Cheapest model per provider for micro-calls (~$0.0004 per call) */
+export const MICRO_CALL_MODELS: Record<string, string> = {
+  anthropic: 'claude-haiku-4-5-20251001',
+  openai: 'gpt-4o-mini',
+  gemini: 'gemini-2.0-flash',
+  openrouter: 'meta-llama/llama-3.1-8b-instruct:free',
+};
+
+export function getMicroCallModel(providerId: string): string {
+  return MICRO_CALL_MODELS[providerId] ?? 'gpt-4o-mini';
+}
+
+/**
+ * D4 Cascade with Step 4 (LLM micro-call).
+ * Steps 1-3 are synchronous regex. Step 4 calls the LLM with 3s timeout.
+ */
+export async function detectDGSelectionAsync(
+  userPrompt: string,
+  previousOptions: DGOption[],
+  llmCall: ((prompt: string) => Promise<string | null>) | null,
+): Promise<string | null> {
+  // Steps 1-3
+  const regexResult = detectDGSelection(userPrompt, previousOptions);
+  if (regexResult) return regexResult;
+
+  // Step 4: LLM micro-call
+  if (!llmCall || previousOptions.length < 2) return null;
+
+  try {
+    const optionList = previousOptions.map((o) => `${o.id}: ${o.title}`).join('\n');
+    const microPrompt = `Previous Decision Gate options:\n${optionList}\n\nUser's response: "${userPrompt.substring(0, 200)}"\n\nWhich option did the user select? Reply ONLY with A, B, or C. If unclear, reply NONE.`;
+
+    const response = await Promise.race([
+      llmCall(microPrompt),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
+    ]);
+
+    if (response) {
+      const letterMatch = response.match(/\b([ABC])\b/);
+      if (letterMatch) return letterMatch[1]!;
+    }
+  } catch {
+    // Step 4 failed
+  }
+
   return null;
 }

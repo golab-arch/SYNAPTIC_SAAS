@@ -16,7 +16,9 @@ import type { ToolExecutor } from '../tools/tool-executor.js';
 import { GRADUATED_ENFORCEMENT, getEnforcementLevelForCycle } from '../engines/enforcement/constants.js';
 import { CycleContextManager } from '../engines/intelligence/cycle-context-manager.js';
 import { detectInferredLearnings, type ToolActionSummary } from '../engines/intelligence/learning-detectors.js';
-import { detectDGSelection, parseDecisionGateFromResponse } from '../engines/intelligence/dg-selection-detector.js';
+import { detectDGSelectionAsync, getMicroCallModel, parseDecisionGateFromResponse } from '../engines/intelligence/dg-selection-detector.js';
+import { EnforcementTracker } from '../engines/intelligence/enforcement-tracker.js';
+import { shouldRunEnrichment, runS4Enrichment } from '../engines/intelligence/s4-enrichment.js';
 import type { OrchestrationRequest, SSEEvent } from './types.js';
 
 export interface AgentLoopConfig {
@@ -33,6 +35,7 @@ export class AgentLoopService {
   private readonly config: AgentLoopConfig;
 
   private readonly cycleContextManager: CycleContextManager;
+  private readonly enforcementTracker: EnforcementTracker;
 
   constructor(
     private readonly protocolEngine: IProtocolEngine,
@@ -43,10 +46,12 @@ export class AgentLoopService {
     private readonly llmProvider: ILLMProvider,
     private readonly toolExecutor?: ToolExecutor,
     cycleContextManager?: CycleContextManager,
+    enforcementTracker?: EnforcementTracker,
     config?: Partial<AgentLoopConfig>,
   ) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.cycleContextManager = cycleContextManager ?? new CycleContextManager();
+    this.enforcementTracker = enforcementTracker ?? new EnforcementTracker();
   }
 
   /**
@@ -344,7 +349,17 @@ export class AgentLoopService {
           if (lastCycle?.responseSummary) {
             const previousDG = parseDecisionGateFromResponse(lastCycle.responseSummary);
             if (previousDG.detected) {
-              const selectedId = detectDGSelection(request.prompt, previousDG.options);
+              const selectedId = await detectDGSelectionAsync(
+                request.prompt,
+                previousDG.options,
+                async (microPrompt) => {
+                  try {
+                    const microModel = getMicroCallModel(request.provider.providerId);
+                    const resp = await llm.sendMessage({ model: microModel, messages: [{ role: 'user' as const, content: microPrompt }], maxTokens: 5, temperature: 0 });
+                    return resp.content;
+                  } catch { return null; }
+                },
+              );
               if (selectedId) {
                 detectedDGOption = selectedId;
                 const selectedOption = previousDG.options.find((o) => o.id === selectedId);
@@ -377,6 +392,41 @@ export class AgentLoopService {
         } catch {
           // DG detection is non-critical
         }
+      }
+
+      // ── STEP 9d: Enforcement pattern analysis (DG-126 Phase 4) ──
+      if (!hadProviderError && !enforcementGradeF) {
+        try {
+          this.enforcementTracker.record(tentativeCycle, validationResult.score, validationResult.grade, request.provider.model, request.provider.providerId);
+          const patternLearnings = this.enforcementTracker.analyze(tentativeCycle);
+          for (const pl of patternLearnings) {
+            await this.intelligenceEngine.addLearning(pl);
+          }
+        } catch { /* non-critical */ }
+      }
+
+      // ── STEP 9e: S4 Semantic enrichment (DG-126 Phase 4) ──
+      if (!hadProviderError && !enforcementGradeF && shouldRunEnrichment(tentativeCycle)) {
+        try {
+          const allLearnings = await this.intelligenceEngine.getLearnings();
+          const snapshots = this.cycleContextManager.getSnapshots();
+          const summaries = snapshots.map((s) =>
+            `Cycle ${s.cycle}: ${s.requirementSummary.substring(0, 200)}\nResponse: ${s.responseSummary.substring(0, 500)}`,
+          );
+          const microModel = getMicroCallModel(request.provider.providerId);
+          const s4Result = await runS4Enrichment(allLearnings, summaries, tentativeCycle, async (prompt) => {
+            try {
+              const resp = await llm.sendMessage({ model: microModel, messages: [{ role: 'user' as const, content: prompt }], maxTokens: 500, temperature: 0.2 });
+              return resp.content;
+            } catch { return null; }
+          });
+          for (const insight of s4Result.newLearnings) {
+            await this.intelligenceEngine.addLearning(insight);
+          }
+          if (s4Result.newLearnings.length > 0) {
+            yield { event: 'message', data: { step: 's4_enrichment', newInsights: s4Result.newLearnings.length } };
+          }
+        } catch { /* S4 is non-critical */ }
       }
 
       // ── STEP 10: Capture cycle context (DG-126 Phase 2A + 2B) ──

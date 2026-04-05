@@ -13,8 +13,10 @@ export {
 } from './confidence-system.js';
 export { detectInferredLearnings } from './learning-detectors.js';
 export type { ToolActionSummary } from './learning-detectors.js';
-export { detectDGSelection, parseDecisionGateFromResponse } from './dg-selection-detector.js';
+export { detectDGSelection, detectDGSelectionAsync, getMicroCallModel, parseDecisionGateFromResponse, MICRO_CALL_MODELS } from './dg-selection-detector.js';
 export { CycleContextManager } from './cycle-context-manager.js';
+export { EnforcementTracker } from './enforcement-tracker.js';
+export { shouldRunEnrichment, runS4Enrichment, buildS4Prompt, applyS4Actions } from './s4-enrichment.js';
 export {
   CONTRADICTION_CATEGORIES,
   INITIAL_CONFIDENCE,
