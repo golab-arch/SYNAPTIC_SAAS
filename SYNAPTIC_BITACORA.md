@@ -1069,4 +1069,32 @@ Phase 2A (confidence + CycleContextManager) + Phase 2B (learning pipeline) + Pha
 
 ---
 
+### Session 16 — DG-126 Phase 3A: Chat Area UX
+
+**Fecha**: 2026-04-05
+**Fase**: PRODUCTION
+**Tipo**: Feature — ProviderErrorModal + MarkdownRenderer fixes + ActivityLog
+**Synaptic Strength**: 80%
+
+#### Items implementados
+
+| # | Feature | Archivo(s) | LOC |
+|---|---------|-----------|-----|
+| 1 | ProviderErrorModal | NEW ProviderErrorModal.tsx, App.tsx | ~80 |
+| 2 | MarkdownRenderer fixes | MarkdownRenderer.tsx (rewrite) | ~40 |
+| 3 | ActivityLog | NEW ActivityLog.tsx, chat-store.ts, useChat.ts, App.tsx | ~190 |
+
+#### Detalles
+
+- **ProviderErrorModal**: Dialog modal con category-specific icon/color, user message, suggestion, category badge
+- **MarkdownRenderer**: autoFenceContent() wraps unfenced JSON in code fences, overflow-wrap + word-break for long tokens, horizontal scroll for code blocks
+- **ActivityLog**: Expandable tool execution feed with status icons, iteration numbers, tool type badges, error details, expandable output preview, live elapsed timer
+
+#### Verificacion
+
+- Backend: typecheck PASS, **126/126 tests PASS**
+- Frontend: typecheck PASS, build PASS
+
+---
+
 *SYNAPTIC Protocol v3.0 STRICT — BITACORA Active*

@@ -1,11 +1,40 @@
+/**
+ * MarkdownRenderer — GFM + syntax highlighting + auto-fence + overflow fixes (DG-126 Phase 3A).
+ */
+
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
+/** F2: Auto-detect unfenced JSON/code blocks and wrap them in fences. */
+function autoFenceContent(text: string): string {
+  if (text.includes('```')) return text;
+  const trimmed = text.trim();
+
+  // Whole-content JSON object or array
+  if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+      (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+    try { JSON.parse(trimmed); return '```json\n' + trimmed + '\n```'; }
+    catch { /* not valid JSON */ }
+  }
+
+  // Embedded JSON blocks
+  return text.replace(
+    /^(\{[\s\S]{20,}?\n\}|\[[\s\S]{20,}?\n\])/gm,
+    (match) => {
+      try { JSON.parse(match); return '```json\n' + match + '\n```'; }
+      catch { return match; }
+    },
+  );
+}
+
 export function MarkdownRenderer({ content }: { content: string }) {
+  const processed = autoFenceContent(content);
+
   return (
-    <div className="prose prose-invert prose-sm max-w-none">
+    <div className="prose prose-invert prose-sm max-w-none"
+      style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -16,7 +45,8 @@ export function MarkdownRenderer({ content }: { content: string }) {
               return <code className="bg-gray-700 px-1 py-0.5 rounded text-sm" {...rest}>{children}</code>;
             }
             return (
-              <SyntaxHighlighter style={vscDarkPlus} language={match[1]} PreTag="div">
+              <SyntaxHighlighter style={vscDarkPlus} language={match[1]} PreTag="div"
+                customStyle={{ overflowX: 'auto', maxWidth: '100%' }}>
                 {String(children).replace(/\n$/, '')}
               </SyntaxHighlighter>
             );
@@ -32,7 +62,7 @@ export function MarkdownRenderer({ content }: { content: string }) {
           },
         }}
       >
-        {content}
+        {processed}
       </ReactMarkdown>
     </div>
   );

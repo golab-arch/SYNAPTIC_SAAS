@@ -11,6 +11,8 @@ import { Sidebar } from './components/layout/Sidebar';
 import { ChatPanel } from './components/chat/ChatPanel';
 import { ChatInput } from './components/chat/ChatInput';
 import { DecisionGateCard } from './components/decisions/DecisionGateCard';
+import { ProviderErrorModal } from './components/chat/ProviderErrorModal';
+import { ActivityLog } from './components/chat/ActivityLog';
 import { ApiClient } from './api/client';
 
 function LoadingScreen() {
@@ -78,6 +80,10 @@ function ChatView({ projectId, projectName, onBack }: { projectId: string; proje
         </div>
         <main className="flex-1 flex flex-col min-w-0">
           <ChatPanel messages={chat.messages} isStreaming={chat.isStreaming} streamingContent={chat.streamingContent} />
+          {/* Activity Log — tool execution feed */}
+          {chat.toolEntries.length > 0 && (
+            <ActivityLog entries={chat.toolEntries} isRunning={chat.isStreaming} startedAt={chat.streamStartedAt} />
+          )}
           {chat.pendingDecisionGate && (
             <div className="px-4">
               <DecisionGateCard gate={chat.pendingDecisionGate}
@@ -93,6 +99,10 @@ function ChatView({ projectId, projectName, onBack }: { projectId: string; proje
                   useChatStore.getState().setDecisionGate(null);
                 }} />
             </div>
+          )}
+          {/* Provider error modal */}
+          {chat.providerError && (
+            <ProviderErrorModal error={chat.providerError} onClose={() => useChatStore.getState().setProviderError(null)} />
           )}
           {chat.error && <div className="px-4 py-2 bg-red-900/50 text-red-300 text-sm border-t border-red-800">{chat.error}</div>}
           <ChatInput onSend={chat.sendMessage} onCancel={chat.cancelStream} isStreaming={chat.isStreaming} disabled={!settings.apiKeyValid} />

@@ -6,6 +6,8 @@ import { SSEClient } from '../api/sse-client';
 
 export function useChat() {
   const sseRef = useRef(new SSEClient());
+  const iterationRef = useRef(0);
+  const streamStartRef = useRef<number | null>(null);
   const chat = useChatStore();
   const session = useSessionStore();
   const settings = useSettingsStore();
@@ -26,6 +28,9 @@ export function useChat() {
     chat.setStreaming(true);
     chat.setError(null);
     chat.setProviderError(null);
+    chat.clearToolEntries();
+    iterationRef.current = 0;
+    streamStartRef.current = Date.now();
 
     const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const history = chat.messages.slice(-20).map((m) => ({ role: m.role, content: m.content }));
@@ -60,13 +65,36 @@ export function useChat() {
             }
             break;
           }
-          case 'tool_use':
-            chat.appendStreamingContent(`\n\n**Tool**: ${data?.tool ?? data?.name ?? 'unknown'}\n`);
+          case 'tool_use': {
+            iterationRef.current++;
+            const toolName = (data?.tool ?? data?.name ?? 'unknown') as string;
+            const inputPreview = typeof data?.input === 'object'
+              ? JSON.stringify(data.input).substring(0, 100)
+              : String(data?.tool ?? '').substring(0, 100);
+            chat.addToolEntry({
+              id: `tool-${Date.now()}-${iterationRef.current}`,
+              toolName,
+              inputPreview,
+              status: 'executing',
+              iteration: iterationRef.current,
+            });
+            chat.appendStreamingContent(`\n\n**Tool**: ${toolName}\n`);
             break;
+          }
           case 'tool_result': {
-            const status = data?.isError ? 'Error' : 'OK';
-            const output = String(data?.output ?? data?.result ?? '').substring(0, 200);
-            chat.appendStreamingContent(`[${status}] ${output}\n\n`);
+            const trStatus = data?.isError ? 'Error' : 'OK';
+            const trOutput = String(data?.output ?? data?.result ?? '').substring(0, 5000);
+            const trTool = (data?.tool ?? '') as string;
+            const entries = useChatStore.getState().toolEntries;
+            const executing = [...entries].reverse().find((e) => e.status === 'executing' && e.toolName === trTool);
+            if (executing) {
+              chat.updateToolEntry(executing.id, {
+                status: data?.isError ? 'failed' : 'completed',
+                output: trOutput,
+                error: data?.isError ? trOutput.substring(0, 200) : undefined,
+              });
+            }
+            chat.appendStreamingContent(`[${trStatus}] ${trOutput.substring(0, 200)}\n\n`);
             break;
           }
           case 'regeneration':
@@ -95,6 +123,7 @@ export function useChat() {
             }
             break;
           case 'done': {
+            streamStartRef.current = null;
             const result = data as { cycle?: number; compliance?: { score: number; grade: string }; saiAudit?: { score: number; grade: string; findings: number } };
             chat.finalizeStreaming({
               cycle: result.cycle,
@@ -142,6 +171,8 @@ export function useChat() {
     pendingDecisionGate: chat.pendingDecisionGate,
     error: chat.error,
     providerError: chat.providerError,
+    toolEntries: chat.toolEntries,
+    streamStartedAt: streamStartRef.current,
     sendMessage,
     cancelStream,
     clearMessages: chat.clearMessages,

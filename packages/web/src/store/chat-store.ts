@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { ToolEntry } from '../components/chat/ActivityLog';
 
 export interface ChatMessage {
   id: string;
@@ -42,6 +43,7 @@ interface ChatState {
   pendingDecisionGate: DecisionGate | null;
   error: string | null;
   providerError: ProviderErrorInfo | null;
+  toolEntries: ToolEntry[];
 
   addMessage: (msg: ChatMessage) => void;
   setStreaming: (s: boolean) => void;
@@ -50,6 +52,9 @@ interface ChatState {
   setDecisionGate: (gate: DecisionGate | null) => void;
   setError: (error: string | null) => void;
   setProviderError: (error: ProviderErrorInfo | null) => void;
+  addToolEntry: (entry: ToolEntry) => void;
+  updateToolEntry: (id: string, updates: Partial<ToolEntry>) => void;
+  clearToolEntries: () => void;
   clearMessages: () => void;
 }
 
@@ -62,6 +67,7 @@ export const useChatStore = create<ChatState>()(
       pendingDecisionGate: null,
       error: null,
       providerError: null,
+      toolEntries: [],
 
       addMessage: (msg) => set((s) => ({ messages: [...s.messages.slice(-99), msg] })),
 
@@ -84,7 +90,12 @@ export const useChatStore = create<ChatState>()(
       setDecisionGate: (gate) => set({ pendingDecisionGate: gate }),
       setError: (error) => set({ error }),
       setProviderError: (providerError) => set({ providerError }),
-      clearMessages: () => set({ messages: [], streamingContent: '', isStreaming: false }),
+      addToolEntry: (entry) => set((s) => ({ toolEntries: [...s.toolEntries, entry] })),
+      updateToolEntry: (id, updates) => set((s) => ({
+        toolEntries: s.toolEntries.map((e) => e.id === id ? { ...e, ...updates } : e),
+      })),
+      clearToolEntries: () => set({ toolEntries: [] }),
+      clearMessages: () => set({ messages: [], streamingContent: '', isStreaming: false, toolEntries: [] }),
     }),
     { name: 'synaptic-chat', partialize: (s) => ({ messages: s.messages }) },
   ),
