@@ -11,6 +11,10 @@ export {
   filterForInjection,
   findSimilarLearning,
 } from './confidence-system.js';
+export { detectInferredLearnings } from './learning-detectors.js';
+export type { ToolActionSummary } from './learning-detectors.js';
+export { detectDGSelection, parseDecisionGateFromResponse } from './dg-selection-detector.js';
+export { CycleContextManager } from './cycle-context-manager.js';
 export {
   CONTRADICTION_CATEGORIES,
   INITIAL_CONFIDENCE,

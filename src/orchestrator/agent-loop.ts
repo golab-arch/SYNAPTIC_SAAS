@@ -9,12 +9,14 @@ import { ProviderError, classifyProviderError } from '../providers/types.js';
 import { createProvider } from '../providers/provider-factory.js';
 import type { IEnforcementEngine } from '../engines/enforcement/types.js';
 import type { ISAIEngine, FileContent } from '../engines/sai/types.js';
-import type { IIntelligenceEngine, BitacoraCycleEntry } from '../engines/intelligence/types.js';
+import type { IIntelligenceEngine, BitacoraCycleEntry, LearningEntry } from '../engines/intelligence/types.js';
 import type { IGuidanceEngine } from '../engines/guidance/types.js';
 import type { IProtocolEngine } from '../engines/protocol/types.js';
 import type { ToolExecutor } from '../tools/tool-executor.js';
 import { GRADUATED_ENFORCEMENT, getEnforcementLevelForCycle } from '../engines/enforcement/constants.js';
 import { CycleContextManager } from '../engines/intelligence/cycle-context-manager.js';
+import { detectInferredLearnings, type ToolActionSummary } from '../engines/intelligence/learning-detectors.js';
+import { detectDGSelection, parseDecisionGateFromResponse } from '../engines/intelligence/dg-selection-detector.js';
 import type { OrchestrationRequest, SSEEvent } from './types.js';
 
 export interface AgentLoopConfig {
@@ -121,6 +123,7 @@ export class AgentLoopService {
       ];
       const toolDefs = this.toolExecutor?.getToolDefinitions() ?? [];
       const maxToolRounds = 20;
+      const toolActions: ToolActionSummary[] = [];  // DG-126 Phase 2B: collect for learning extraction
 
       for (let toolRound = 0; toolRound < maxToolRounds; toolRound++) {
         let currentToolId: string | undefined;
@@ -173,6 +176,15 @@ export class AgentLoopService {
           const result = await this.toolExecutor.execute({ id: tc.id, name: tc.name, input: tc.input });
           yield { event: 'tool_result', data: { tool: tc.name, output: result.output.substring(0, 5000), isError: result.isError } };
           messages.push({ role: 'user' as const, content: `[Tool result for ${tc.name}]: ${result.output.substring(0, 10000)}` });
+
+          // DG-126 Phase 2B: Collect tool data for learning extraction
+          if (!result.isError) {
+            toolActions.push({
+              toolName: tc.name,
+              inputPreview: JSON.stringify(tc.input).substring(0, 200),
+              filePaths: extractFilePathsFromInput(tc.input),
+            });
+          }
         }
       }
 
@@ -296,13 +308,76 @@ export class AgentLoopService {
         // Guidance is non-critical
       }
 
-      // ── STEP 10: Capture cycle context for next cycle (DG-126 Phase 2A) ──
+      // ── STEP 9b: Extract inferred learnings from tool data (DG-126 Phase 2B) ──
+      if (toolActions.length > 0 && !hadProviderError && !enforcementGradeF) {
+        try {
+          const inferredLearnings = detectInferredLearnings(toolActions, tentativeCycle);
+          for (const learning of inferredLearnings) {
+            await this.intelligenceEngine.addLearning(learning);
+          }
+          if (inferredLearnings.length > 0) {
+            yield { event: 'message', data: { step: 'learnings_extracted', count: inferredLearnings.length, type: 'inferred' } };
+          }
+        } catch {
+          // Learning extraction is non-critical
+        }
+      }
+
+      // ── STEP 9c: Detect explicit learning from DG selection (DG-126 Phase 2B) ──
+      let detectedDGOption: string | undefined;
+      if (!hadProviderError && !enforcementGradeF) {
+        try {
+          const lastCycle = this.cycleContextManager.getLastCycle();
+          if (lastCycle?.responseSummary) {
+            const previousDG = parseDecisionGateFromResponse(lastCycle.responseSummary);
+            if (previousDG.detected) {
+              const selectedId = detectDGSelection(request.prompt, previousDG.options);
+              if (selectedId) {
+                detectedDGOption = selectedId;
+                const selectedOption = previousDG.options.find((o) => o.id === selectedId);
+
+                this.cycleContextManager.updateLastDecisionSelection(
+                  selectedId,
+                  selectedOption?.title ?? selectedId,
+                );
+
+                const explicitLearning: LearningEntry = {
+                  id: `explicit-${tentativeCycle}-${Date.now()}`,
+                  content: `User prefers: ${selectedOption?.title ?? `Option ${selectedId}`}`,
+                  category: 'user-preference',
+                  confidence: {
+                    score: 0.6,
+                    source: 'EXPLICIT',
+                    evidenceCount: 1,
+                    lastReinforced: new Date().toISOString(),
+                    lastReinforcedCycle: tentativeCycle,
+                  },
+                  createdAt: new Date().toISOString(),
+                  createdInCycle: tentativeCycle,
+                };
+                await this.intelligenceEngine.addLearning(explicitLearning);
+
+                yield { event: 'message', data: { step: 'learnings_extracted', count: 1, type: 'explicit', option: selectedId } };
+              }
+            }
+          }
+        } catch {
+          // DG detection is non-critical
+        }
+      }
+
+      // ── STEP 10: Capture cycle context (DG-126 Phase 2A + 2B) ──
+      const responseDG = parseDecisionGateFromResponse(fullResponse);
       this.cycleContextManager.captureCycleState({
         cycle: hadProviderError || enforcementGradeF ? tentativeCycle : cycle,
         timestamp: new Date().toISOString(),
         requirementSummary: request.prompt,
         responseSummary: fullResponse,
-        decisionGate: undefined,
+        decisionGate: responseDG.detected ? {
+          detected: true,
+          options: responseDG.options,
+          selectedOption: detectedDGOption,
+        } : undefined,
         enforcement: {
           score: validationResult.score,
           grade: validationResult.grade,
@@ -412,4 +487,17 @@ function extractChangedFiles(response: string): FileContent[] {
   }
 
   return files;
+}
+
+/** DG-126 Phase 2B: Extract file paths from tool input for learning detection */
+function extractFilePathsFromInput(input: Record<string, unknown>): string[] {
+  const paths: string[] = [];
+  if (typeof input.file_path === 'string') paths.push(input.file_path);
+  if (typeof input.path === 'string') paths.push(input.path);
+  if (typeof input.pattern === 'string') paths.push(input.pattern);
+  if (typeof input.command === 'string') {
+    const fileMatches = input.command.match(/[\w./-]+\.\w{1,10}/g);
+    if (fileMatches) paths.push(...fileMatches);
+  }
+  return paths;
 }

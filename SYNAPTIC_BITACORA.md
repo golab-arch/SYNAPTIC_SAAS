@@ -989,4 +989,44 @@ Ring buffer de 5 snapshots que se inyecta en system prompt:
 
 ---
 
+### Session 14 — DG-126 Phase 2B: Learning Generation Pipeline
+
+**Fecha**: 2026-04-05
+**Fase**: PRODUCTION
+**Tipo**: Feature — Inferred detectors + D4 cascade + tool data collection
+**Synaptic Strength**: 70%
+
+#### Items implementados
+
+| # | Feature | Archivo(s) | LOC |
+|---|---------|-----------|-----|
+| 1 | Tool data collection | agent-loop.ts | ~25 |
+| 2 | 6 inferred learning detectors | NEW learning-detectors.ts | ~200 |
+| 3 | D4 cascade (steps 1-3) | NEW dg-selection-detector.ts | ~100 |
+| 4 | Agent loop integration | agent-loop.ts (steps 9b, 9c, 10) | ~60 |
+| 5 | Exports | intelligence/index.ts | ~5 |
+
+#### 6 Inferred Detectors
+
+1. **Tech Stack** — file extensions (.ts, .tsx, .py, etc.) → language/framework
+2. **Dependencies** — npm/yarn/pip/cargo install commands → dependency list
+3. **Package Manager** — detects npm/yarn/pnpm/pip/cargo from commands
+4. **Test Framework** — vitest/jest/mocha/pytest from commands
+5. **Folder Patterns** — components/services/hooks/api → architecture description
+6. **Naming Convention** — kebab-case/camelCase/PascalCase/snake_case from filenames
+
+#### D4 Cascade (Steps 1-3)
+
+- Step 1: Direct letter regex ("opcion B", "option A", "proceed with C")
+- Step 2: Ordinal/positional ("primera", "second", "last", "del medio")
+- Step 3: Keyword match vs DG option titles (Jaccard >= 40%)
+- Step 4: LLM micro-call — deferred to Phase 4
+
+#### Verificacion
+
+- Backend: typecheck PASS, **126/126 tests PASS**
+- Frontend: typecheck PASS, build PASS
+
+---
+
 *SYNAPTIC Protocol v3.0 STRICT — BITACORA Active*
