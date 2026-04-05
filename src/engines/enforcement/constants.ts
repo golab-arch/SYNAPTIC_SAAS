@@ -144,6 +144,31 @@ export const VALIDATION_CHECKS = {
   NO_DIRECT_CODE_BEFORE_GATE: /```[\s\S]*?```[\s\S]*?DECISION GATE/i,
 } as const;
 
+// ─── Graduated Enforcement (DG-126) ────────────────────────────
+
+export const GRADUATED_ENFORCEMENT = {
+  /** Cycles 1-5: informational only (no regeneration) */
+  INFORMATIONAL_UNTIL_CYCLE: 5,
+  /** Cycles 6-15: soft enforcement */
+  SOFT_UNTIL_CYCLE: 15,
+  /** Soft mode: regenerate only if score < this */
+  SOFT_THRESHOLD: 50,
+  /** Soft mode: max regeneration attempts */
+  SOFT_MAX_RETRIES: 1,
+  /** Standard mode (16+): regenerate if score < this */
+  STANDARD_THRESHOLD: 70,
+  /** Standard mode: max regeneration attempts */
+  STANDARD_MAX_RETRIES: 2,
+} as const;
+
+export type EnforcementLevel = 'informational' | 'soft' | 'standard';
+
+export function getEnforcementLevelForCycle(cycle: number): EnforcementLevel {
+  if (cycle <= GRADUATED_ENFORCEMENT.INFORMATIONAL_UNTIL_CYCLE) return 'informational';
+  if (cycle <= GRADUATED_ENFORCEMENT.SOFT_UNTIL_CYCLE) return 'soft';
+  return 'standard';
+}
+
 // ─── Default Config ─────────────────────────────────────────────
 
 export const DEFAULT_ENFORCEMENT_CONFIG: EnforcementConfig = {

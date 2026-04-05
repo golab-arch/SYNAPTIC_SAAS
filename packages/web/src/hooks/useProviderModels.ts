@@ -15,6 +15,7 @@ export interface ProviderModel {
   supportsTools: boolean;
   capabilities: string[];
   provider: string;
+  synapticTier?: 1 | 2 | 3;
 }
 
 export function useProviderModels(providerId: string, apiKey: string) {

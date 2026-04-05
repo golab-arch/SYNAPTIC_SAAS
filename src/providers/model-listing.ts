@@ -20,6 +20,33 @@ export interface ProviderModel {
   supportsTools: boolean;
   capabilities: string[];  // 'tools' | 'vision' | 'streaming' | 'thinking' | 'pdf'
   provider: string;
+  synapticTier?: 1 | 2 | 3;  // DG-126: SYNAPTIC compliance tier
+}
+
+// ─── SYNAPTIC Compliance Tiers (DG-126) ─────────────────────────
+
+/** Tier 1: Recommended, Tier 2: Compatible, Tier 3: Limited */
+const SYNAPTIC_MODEL_TIERS: Record<string, 1 | 2 | 3> = {
+  // Tier 1 — Recommended
+  'claude-opus-4': 1, 'claude-sonnet-4': 1, 'claude-3-7-sonnet': 1, 'claude-3-5-sonnet': 1,
+  'gpt-4o': 1, 'gpt-4.1': 1, 'gemini-2.5-pro': 1,
+  // Tier 2 — Compatible
+  'claude-haiku': 2, 'claude-3-5-haiku': 2,
+  'gpt-4o-mini': 2, 'gpt-4.1-mini': 2, 'o3': 2, 'o4-mini': 2,
+  'gemini-2.5-flash': 2, 'gemini-2.0-flash': 2,
+  // Tier 3 — Limited
+  'gpt-4.1-nano': 3, 'o1': 3, 'gemini-1.5-flash': 3,
+};
+
+export function getSynapticTier(modelId: string): 1 | 2 | 3 | undefined {
+  const stripped = modelId.includes('/') ? modelId.split('/').pop()! : modelId;
+  if (SYNAPTIC_MODEL_TIERS[stripped] !== undefined) return SYNAPTIC_MODEL_TIERS[stripped];
+  // Prefix match (longest first)
+  const prefixes = Object.keys(SYNAPTIC_MODEL_TIERS).sort((a, b) => b.length - a.length);
+  for (const prefix of prefixes) {
+    if (stripped.startsWith(prefix)) return SYNAPTIC_MODEL_TIERS[prefix];
+  }
+  return undefined;
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -259,9 +286,16 @@ export async function listProviderModels(
 
   try {
     const models = await adapter(apiKey);
-    // Sort: tools-capable first, then by context window desc
+    // Enrich with SYNAPTIC compliance tier
+    for (const m of models) {
+      m.synapticTier = getSynapticTier(m.id);
+    }
+    // Sort: tools-capable first, then by tier (1 > 2 > 3 > undefined), then by context window desc
     models.sort((a, b) => {
       if (a.supportsTools !== b.supportsTools) return a.supportsTools ? -1 : 1;
+      const ta = a.synapticTier ?? 9;
+      const tb = b.synapticTier ?? 9;
+      if (ta !== tb) return ta - tb;
       return b.contextWindow - a.contextWindow;
     });
     setCache(cacheKey, models);

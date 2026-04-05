@@ -6,7 +6,7 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useSettingsStore } from '../../store/settings-store';
-import { useProviderModels, type ProviderModel } from '../../hooks/useProviderModels';
+import { useProviderModels } from '../../hooks/useProviderModels';
 
 function fmtCtx(tokens: number): string {
   if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
@@ -19,6 +19,13 @@ function fmtPrice(price: number): string {
   if (price < 0.01) return '<$0.01/M';
   if (price < 1) return `$${price.toFixed(2)}/M`;
   return `$${price.toFixed(1)}/M`;
+}
+
+function tierBadge(tier?: 1 | 2 | 3): { label: string; css: string } | null {
+  if (tier === 1) return { label: '\u2605', css: 'bg-green-900/50 text-green-400' };    // ★ Recommended
+  if (tier === 2) return { label: '\u2606', css: 'bg-blue-900/50 text-blue-400' };      // ☆ Compatible
+  if (tier === 3) return { label: '\u26A0', css: 'bg-yellow-900/50 text-yellow-400' };  // ⚠ Limited
+  return null;
 }
 
 export function ModelCombobox() {
@@ -115,6 +122,7 @@ export function ModelCombobox() {
       {/* Current model info badges */}
       {currentModel && !isOpen && (
         <div className="flex flex-wrap items-center gap-1.5 mt-1">
+          {(() => { const tb = tierBadge(currentModel.synapticTier); return tb ? <span className={`text-xs px-1 rounded ${tb.css}`} title={`Tier ${currentModel.synapticTier}`}>{tb.label}</span> : null; })()}
           <span className="text-xs text-gray-500">{fmtCtx(currentModel.contextWindow)} ctx</span>
           {currentModel.inputPrice > 0 && (
             <span className="text-xs text-green-500">{fmtPrice(currentModel.inputPrice)} in</span>
@@ -170,9 +178,12 @@ export function ModelCombobox() {
                 i === hlIdx ? 'bg-gray-700' : 'hover:bg-gray-700/50'
               } ${model.id === modelId ? 'border-l-2 border-synaptic-500' : ''}`}
             >
-              {/* Row 1: ID + context */}
+              {/* Row 1: tier + ID + context */}
               <div className="flex items-center justify-between">
-                <span className="text-white truncate font-mono text-xs">{model.id}</span>
+                <span className="flex items-center gap-1 truncate">
+                  {(() => { const tb = tierBadge(model.synapticTier); return tb ? <span className={`text-xs px-0.5 rounded ${tb.css}`}>{tb.label}</span> : null; })()}
+                  <span className="text-white font-mono text-xs truncate">{model.id}</span>
+                </span>
                 <span className="text-xs text-gray-500 ml-2 shrink-0">{fmtCtx(model.contextWindow)}</span>
               </div>
               {/* Row 2: Name + price + badges */}

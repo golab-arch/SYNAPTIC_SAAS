@@ -881,4 +881,64 @@ Estrategia: API dinamica + enriquecimiento con pricing estatico + fallback.
 
 ---
 
+### Session 12 — DG-126 Phase 1: User Protection Features
+
+**Fecha**: 2026-04-05
+**Fase**: PRODUCTION
+**Tipo**: Feature — 4 user-protection features migrated from VSC_EXTENSION
+**Synaptic Strength**: 60%
+
+#### Items implementados
+
+| # | Feature | Archivos |
+|---|---------|----------|
+| 1 | Provider Error Classification | `providers/types.ts` (+100 LOC), `orchestrator/agent-loop.ts`, `orchestrator/types.ts`, `web/store/chat-store.ts`, `web/hooks/useChat.ts` |
+| 2 | Graduated Enforcement | `enforcement/constants.ts` (+25 LOC), `orchestrator/agent-loop.ts` |
+| 3 | SYNAPTIC Compliance Tiers | `providers/model-listing.ts` (+30 LOC), `web/components/settings/ModelCombobox.tsx` |
+| 4 | User Protection (no-cycle-on-error + Grade F skip) | `orchestrator/agent-loop.ts`, `intelligence/types.ts`, `intelligence/session-manager.ts`, `intelligence/intelligence-engine.ts` |
+
+#### Detalles de implementacion
+
+**Item 1 — Provider Error Classification**:
+- `ProviderError` class con 10 categorias (MODEL_NOT_FOUND, RATE_LIMITED, AUTH_FAILED, etc.)
+- `classifyProviderError()`: clasifica por HTTP status + patterns en mensaje
+- Nuevo SSE event `provider_error` con category, userMessage, suggestion
+- Frontend: `providerError` state en chat-store, manejado en useChat
+
+**Item 2 — Graduated Enforcement**:
+- Cycles 1-5: `informational` (valida pero NO regenera)
+- Cycles 6-15: `soft` (regenera solo si score < 50, max 1 retry)
+- Cycles 16+: `standard` (regenera si score < 70, max 2 retries)
+- Funcion `getEnforcementLevelForCycle()` determina el modo
+
+**Item 3 — SYNAPTIC Compliance Tiers**:
+- Tier 1 (★ Recommended): claude-opus/sonnet-4, gpt-4o, gemini-2.5-pro
+- Tier 2 (☆ Compatible): haiku, gpt-4o-mini, o3/o4-mini, gemini-flash
+- Tier 3 (⚠ Limited): o1, gemini-1.5-flash, nano
+- `getSynapticTier()`: prefix matching, strips OpenRouter provider prefix
+- Badges en ModelCombobox (dropdown + model info)
+
+**Item 4 — User Protection**:
+- `peekNextCycle()`: lee proximo ciclo sin comitearlo
+- Ciclo solo se comitea (incrementCycle) en STEP 8 si no hubo error ni Grade F
+- Provider error → `hadProviderError = true` → ciclo NO cuenta
+- Grade F post-retries → `enforcementGradeF = true` → ciclo NO cuenta
+- BITACORA registra el ciclo como ERROR/SKIPPED (para auditoria)
+- BitacoraCycleEntry.result ampliado: + 'ERROR' | 'SKIPPED'
+
+#### Verificacion
+
+- Backend: typecheck PASS, **126/126 source tests PASS**
+- Frontend: typecheck PASS, build PASS (10.68s)
+
+#### Pendientes para Ciclo 13
+
+1. WebContainers para tool execution en browser
+2. File explorer panel + Preview panel
+3. Provider error UI component (modal/toast con suggestion)
+4. E2E tests for graduated enforcement + error classification
+5. Deploy: Docker + Cloud Run
+
+---
+
 *SYNAPTIC Protocol v3.0 STRICT — BITACORA Active*

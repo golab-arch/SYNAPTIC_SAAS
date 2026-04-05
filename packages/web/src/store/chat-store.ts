@@ -29,12 +29,19 @@ export interface DecisionGate {
   recommendation?: string;
 }
 
+export interface ProviderErrorInfo {
+  category: string;
+  message: string;
+  suggestion: string;
+}
+
 interface ChatState {
   messages: ChatMessage[];
   isStreaming: boolean;
   streamingContent: string;
   pendingDecisionGate: DecisionGate | null;
   error: string | null;
+  providerError: ProviderErrorInfo | null;
 
   addMessage: (msg: ChatMessage) => void;
   setStreaming: (s: boolean) => void;
@@ -42,6 +49,7 @@ interface ChatState {
   finalizeStreaming: (metadata?: ChatMessage['metadata']) => void;
   setDecisionGate: (gate: DecisionGate | null) => void;
   setError: (error: string | null) => void;
+  setProviderError: (error: ProviderErrorInfo | null) => void;
   clearMessages: () => void;
 }
 
@@ -53,6 +61,7 @@ export const useChatStore = create<ChatState>()(
       streamingContent: '',
       pendingDecisionGate: null,
       error: null,
+      providerError: null,
 
       addMessage: (msg) => set((s) => ({ messages: [...s.messages.slice(-99), msg] })),
 
@@ -74,6 +83,7 @@ export const useChatStore = create<ChatState>()(
 
       setDecisionGate: (gate) => set({ pendingDecisionGate: gate }),
       setError: (error) => set({ error }),
+      setProviderError: (providerError) => set({ providerError }),
       clearMessages: () => set({ messages: [], streamingContent: '', isStreaming: false }),
     }),
     { name: 'synaptic-chat', partialize: (s) => ({ messages: s.messages }) },

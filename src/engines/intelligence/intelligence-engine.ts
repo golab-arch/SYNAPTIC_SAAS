@@ -141,4 +141,8 @@ export class IntelligenceEngine implements IIntelligenceEngine {
   async incrementCycle(): Promise<number> {
     return this.session.incrementCycle();
   }
+
+  async peekNextCycle(): Promise<number> {
+    return this.session.peekNextCycle();
+  }
 }

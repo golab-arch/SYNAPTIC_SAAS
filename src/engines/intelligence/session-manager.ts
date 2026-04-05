@@ -46,4 +46,9 @@ export class SessionManager {
     });
     return newCycle;
   }
+
+  async peekNextCycle(): Promise<number> {
+    const session = await this.getSession();
+    return session.currentCycle + 1;
+  }
 }

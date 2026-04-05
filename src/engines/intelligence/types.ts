@@ -87,7 +87,7 @@ export interface BitacoraCycleEntry {
   readonly traceId: string;
   readonly timestamp: string;
   readonly phase: string;
-  readonly result: 'SUCCESS' | 'FAILURE' | 'PARTIAL';
+  readonly result: 'SUCCESS' | 'FAILURE' | 'PARTIAL' | 'ERROR' | 'SKIPPED';
   readonly duration: string;
   readonly promptOriginal: string;
   readonly decisionGate: {
@@ -230,4 +230,6 @@ export interface IIntelligenceEngine extends IEngine {
   getSession(): Promise<SynapticSession>;
   updateSession(updates: Partial<SynapticSession>): Promise<void>;
   incrementCycle(): Promise<number>;
+  /** DG-126: peek at next cycle number without committing it */
+  peekNextCycle(): Promise<number>;
 }

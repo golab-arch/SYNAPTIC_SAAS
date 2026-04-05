@@ -5,6 +5,7 @@
  */
 
 import type { ILLMProvider, LLMMessage } from '../providers/types.js';
+import { ProviderError, classifyProviderError } from '../providers/types.js';
 import { createProvider } from '../providers/provider-factory.js';
 import type { IEnforcementEngine } from '../engines/enforcement/types.js';
 import type { ISAIEngine, FileContent } from '../engines/sai/types.js';
@@ -12,6 +13,7 @@ import type { IIntelligenceEngine, BitacoraCycleEntry } from '../engines/intelli
 import type { IGuidanceEngine } from '../engines/guidance/types.js';
 import type { IProtocolEngine } from '../engines/protocol/types.js';
 import type { ToolExecutor } from '../tools/tool-executor.js';
+import { GRADUATED_ENFORCEMENT, getEnforcementLevelForCycle } from '../engines/enforcement/constants.js';
 import type { OrchestrationRequest, SSEEvent } from './types.js';
 
 export interface AgentLoopConfig {
@@ -56,14 +58,18 @@ export class AgentLoopService {
       }
     }
 
+    // DG-126: flags for user protection (Item 4)
+    let hadProviderError = false;
+    let enforcementGradeF = false;
+
     try {
-      // ── STEP 1: Increment cycle ──
-      const cycle = await this.intelligenceEngine.incrementCycle();
-      yield { event: 'message', data: { step: 'cycle', cycle } };
+      // ── STEP 1: Tentative cycle (committed in STEP 8 only on success) ──
+      const tentativeCycle = await this.intelligenceEngine.peekNextCycle();
+      yield { event: 'message', data: { step: 'cycle', cycle: tentativeCycle } };
 
       // ── STEP 2: Pre-cycle maintenance (learning decay) ──
-      if (cycle >= this.config.decayStartCycle) {
-        const archived = await this.intelligenceEngine.applyDecay(cycle);
+      if (tentativeCycle >= this.config.decayStartCycle) {
+        const archived = await this.intelligenceEngine.applyDecay(tentativeCycle);
         if (archived > 0) {
           yield { event: 'message', data: { step: 'decay', archived } };
         }
@@ -79,7 +85,7 @@ export class AgentLoopService {
       const directorFiles = extractDirectorFiles(contextDocs);
 
       const systemPrompt = await this.protocolEngine.buildSystemPrompt({
-        cycle,
+        cycle: tentativeCycle,
         mode: 'SYNAPTIC',
         directorFiles,
         intelligenceSummary,
@@ -96,7 +102,7 @@ export class AgentLoopService {
 
       const wrappedPrompt = this.protocolEngine.wrapUserPrompt({
         userPrompt: request.prompt,
-        cycle,
+        cycle: tentativeCycle,
         loadedFiles,
         enforcementMode: 'STRICT',
       });
@@ -164,40 +170,56 @@ export class AgentLoopService {
         }
       }
 
-      // ── STEP 6: Enforcement validation + regeneration loop ──
+      // ── STEP 6: Graduated enforcement validation (DG-126 Item 2) ──
+      const enforcementLevel = getEnforcementLevelForCycle(tentativeCycle);
       let validationResult = this.enforcementEngine.validate(fullResponse);
       let attempts = 1;
 
-      while (!validationResult.valid && attempts < this.config.maxRegenerationAttempts) {
+      if (enforcementLevel === 'informational') {
+        // Cycles 1-5: validate but don't regenerate
         yield {
-          event: 'regeneration',
-          data: {
-            attempt: attempts,
-            score: validationResult.score,
-            violations: validationResult.violations.length,
-          },
+          event: 'message',
+          data: { step: 'enforcement', mode: 'informational', score: validationResult.score, grade: validationResult.grade },
         };
+      } else {
+        // Cycles 6+: graduated regeneration
+        const threshold = enforcementLevel === 'soft'
+          ? GRADUATED_ENFORCEMENT.SOFT_THRESHOLD
+          : GRADUATED_ENFORCEMENT.STANDARD_THRESHOLD;
+        const maxRetries = enforcementLevel === 'soft'
+          ? GRADUATED_ENFORCEMENT.SOFT_MAX_RETRIES
+          : GRADUATED_ENFORCEMENT.STANDARD_MAX_RETRIES;
 
-        const feedback = this.enforcementEngine.buildRegenerationMessage(
-          validationResult.violations,
-          attempts,
-          this.config.maxRegenerationAttempts,
-        );
+        while (validationResult.score < threshold && attempts <= maxRetries) {
+          yield {
+            event: 'regeneration',
+            data: { attempt: attempts, maxRetries, score: validationResult.score, violations: validationResult.violations.length, mode: enforcementLevel },
+          };
 
-        const regenResponse = await llm.sendMessage({
-          model: request.provider.model,
-          messages: [
-            ...messages,
-            { role: 'assistant' as const, content: fullResponse },
-            { role: 'user' as const, content: feedback },
-          ],
-          systemPrompt,
-          maxTokens: 4096,
-        });
+          const feedback = this.enforcementEngine.buildRegenerationMessage(
+            validationResult.violations, attempts, maxRetries,
+          );
 
-        fullResponse = regenResponse.content;
-        validationResult = this.enforcementEngine.validate(fullResponse);
-        attempts++;
+          const regenResponse = await llm.sendMessage({
+            model: request.provider.model,
+            messages: [...messages, { role: 'assistant' as const, content: fullResponse }, { role: 'user' as const, content: feedback }],
+            systemPrompt,
+            maxTokens: 4096,
+          });
+
+          fullResponse = regenResponse.content;
+          validationResult = this.enforcementEngine.validate(fullResponse);
+          attempts++;
+        }
+      }
+
+      // DG-126 Item 4: Grade F skip — don't charge cycle
+      if (enforcementLevel !== 'informational' && validationResult.grade === 'F') {
+        enforcementGradeF = true;
+        yield {
+          event: 'message',
+          data: { step: 'cycle_skipped', reason: 'enforcement_grade_f', message: 'Enforcement Grade F after all retries — your cycle was NOT counted.' },
+        };
       }
 
       // ── STEP 7: SAI micro-audit (if files changed) ──
@@ -210,14 +232,24 @@ export class AgentLoopService {
         yield { event: 'sai_audit', data: saiResult };
       }
 
-      // ── STEP 8: Persist to intelligence ──
+      // ── STEP 8: Persist to intelligence (DG-126 Item 4: only if cycle should count) ──
       const duration = `${Date.now() - startTime}ms`;
+
+      let cycle: number;
+      if (!hadProviderError && !enforcementGradeF) {
+        // Success: commit the cycle
+        cycle = await this.intelligenceEngine.incrementCycle();
+      } else {
+        // Skipped: don't increment
+        cycle = tentativeCycle - 1;
+      }
+
       const bitacoraEntry: BitacoraCycleEntry = {
-        cycleId: cycle,
+        cycleId: tentativeCycle,
         traceId: request.sessionId,
         timestamp: new Date().toISOString(),
         phase: 'execution',
-        result: validationResult.valid ? 'SUCCESS' : 'PARTIAL',
+        result: hadProviderError ? 'ERROR' : enforcementGradeF ? 'SKIPPED' : validationResult.valid ? 'SUCCESS' : 'PARTIAL',
         duration,
         promptOriginal: request.prompt,
         decisionGate: null,
@@ -227,7 +259,7 @@ export class AgentLoopService {
           protocolCompliance: validationResult.score,
           decisionGatePresented: validationResult.templateCheck.details
             .some((d) => d.sectionId === 'DECISION_GATE' && d.found),
-          memoryUpdated: true,
+          memoryUpdated: !hadProviderError,
           reformulationsNeeded: attempts - 1,
         },
         lessonsLearned: [],
@@ -236,25 +268,23 @@ export class AgentLoopService {
       };
       await this.intelligenceEngine.appendBitacora(bitacoraEntry);
 
-      // Update session state
-      await this.intelligenceEngine.updateSession({
-        currentCycle: cycle,
-        synapticStrength: Math.min(cycle * 3, 100),
-        agentState: {
-          complianceScore: validationResult.score,
-          violationsCount: validationResult.violations.length,
-          successfulCycles: validationResult.valid ? cycle : cycle - 1,
-        },
-      });
+      if (!hadProviderError && !enforcementGradeF) {
+        await this.intelligenceEngine.updateSession({
+          currentCycle: cycle,
+          synapticStrength: Math.min(cycle * 3, 100),
+          agentState: {
+            complianceScore: validationResult.score,
+            violationsCount: validationResult.violations.length,
+            successfulCycles: validationResult.valid ? cycle : cycle - 1,
+          },
+        });
+      }
 
       // ── STEP 9: Guidance (non-critical) ──
       let guidanceData: { nextSteps: unknown[]; orientation: string } | undefined;
       try {
         const guidance = await this.guidanceEngine.generateGuidance();
-        guidanceData = {
-          nextSteps: guidance.nextSteps.slice(0, 3),
-          orientation: guidance.orientation,
-        };
+        guidanceData = { nextSteps: guidance.nextSteps.slice(0, 3), orientation: guidance.orientation };
         yield { event: 'message', data: { step: 'guidance', ...guidanceData } };
       } catch {
         // Guidance is non-critical
@@ -264,12 +294,10 @@ export class AgentLoopService {
       yield {
         event: 'done',
         data: {
-          cycle,
-          compliance: {
-            score: validationResult.score,
-            grade: validationResult.grade,
-            valid: validationResult.valid,
-          },
+          cycle: hadProviderError || enforcementGradeF ? tentativeCycle : cycle,
+          compliance: { score: validationResult.score, grade: validationResult.grade, valid: validationResult.valid },
+          enforcementLevel,
+          cycleSkipped: hadProviderError || enforcementGradeF,
           regenerationAttempts: attempts - 1,
           saiAudit: saiResult,
           guidance: guidanceData,
@@ -277,12 +305,26 @@ export class AgentLoopService {
         },
       };
     } catch (error: unknown) {
-      yield {
-        event: 'error',
-        data: {
-          message: error instanceof Error ? error.message : 'Unknown error',
-        },
-      };
+      // DG-126 Item 1: Classify provider errors
+      hadProviderError = true;
+      const classified = error instanceof ProviderError ? error : classifyProviderError(error);
+
+      if (classified.category !== 'UNKNOWN') {
+        yield {
+          event: 'provider_error',
+          data: {
+            category: classified.category,
+            message: classified.userMessage,
+            suggestion: classified.suggestion,
+            statusCode: classified.statusCode,
+          },
+        };
+      } else {
+        yield {
+          event: 'error',
+          data: { message: error instanceof Error ? error.message : 'Unknown error' },
+        };
+      }
     }
   }
 }

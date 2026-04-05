@@ -25,6 +25,7 @@ export function useChat() {
     });
     chat.setStreaming(true);
     chat.setError(null);
+    chat.setProviderError(null);
 
     const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const history = chat.messages.slice(-20).map((m) => ({ role: m.role, content: m.content }));
@@ -107,6 +108,17 @@ export function useChat() {
             });
             break;
           }
+          case 'provider_error': {
+            // DG-126: Rich provider error with category + suggestion
+            const pe = data as { category?: string; message?: string; suggestion?: string };
+            chat.setProviderError({
+              category: (pe.category as string) ?? 'UNKNOWN',
+              message: (pe.message as string) ?? 'Provider error',
+              suggestion: (pe.suggestion as string) ?? '',
+            });
+            chat.setStreaming(false);
+            break;
+          }
           case 'error':
             chat.setError((data?.message as string) ?? 'Unknown error');
             chat.setStreaming(false);
@@ -129,6 +141,7 @@ export function useChat() {
     streamingContent: chat.streamingContent,
     pendingDecisionGate: chat.pendingDecisionGate,
     error: chat.error,
+    providerError: chat.providerError,
     sendMessage,
     cancelStream,
     clearMessages: chat.clearMessages,
