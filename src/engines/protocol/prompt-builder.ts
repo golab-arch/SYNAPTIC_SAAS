@@ -63,6 +63,11 @@ export function buildSystemPrompt(
     ));
   }
 
+  // Section 3.5: Previous Cycle Context (DG-126 Phase 2A)
+  if (context.previousCycleContext) {
+    sections.push(context.previousCycleContext);
+  }
+
   // Section 4: Bitacora History
   if (context.bitacoraHistory) {
     sections.push(truncateToTokenBudget(

@@ -32,16 +32,16 @@ function makeLearning(opts: { content: string; category: string; confidence?: Pa
 }
 
 describe('ConfidenceSystem', () => {
-  it('should set EXPLICIT initial confidence to 0.9', () => {
-    expect(getInitialScore('EXPLICIT')).toBe(0.9);
+  it('should set EXPLICIT initial confidence to 0.6 (DG-126 aligned)', () => {
+    expect(getInitialScore('EXPLICIT')).toBe(0.6);
   });
 
-  it('should set INFERRED initial confidence to 0.3', () => {
-    expect(getInitialScore('INFERRED')).toBe(0.3);
+  it('should set INFERRED initial confidence to 0.4 (DG-126 aligned)', () => {
+    expect(getInitialScore('INFERRED')).toBe(0.4);
   });
 
-  it('should set REPEATED initial confidence to 0.7', () => {
-    expect(getInitialScore('REPEATED')).toBe(0.7);
+  it('should set REPEATED initial confidence to 0.8 (DG-126 aligned)', () => {
+    expect(getInitialScore('REPEATED')).toBe(0.8);
   });
 
   it('should reinforce with correct increment per source', () => {
@@ -74,26 +74,26 @@ describe('ConfidenceSystem', () => {
     expect(learning.confidence.score).toBe(1.0);
   });
 
-  it('should apply decay after grace period', () => {
+  it('should apply decay after grace period (DG-126: rate 0.02)', () => {
     const learning = makeLearning({
       content: 'test', category: 'testing',
       confidence: { score: 0.8, source: 'REPEATED', evidenceCount: 3, lastReinforced: '', lastReinforcedCycle: 1 },
     });
 
-    // 25 cycles later, grace period = 20, so 5 * 0.1 = 0.5 decay
+    // 26 cycles later, grace period = 20, so 5 * 0.02 = 0.1 decay
     const shouldArchive = applyDecayToLearning(learning, 26);
-    expect(learning.confidence.score).toBeCloseTo(0.3); // 0.8 - 0.5
-    expect(shouldArchive).toBe(false); // 0.3 > 0.2 threshold
+    expect(learning.confidence.score).toBeCloseTo(0.7); // 0.8 - 0.1
+    expect(shouldArchive).toBe(false); // 0.7 > 0.2 threshold
   });
 
-  it('should archive learnings below threshold', () => {
+  it('should archive learnings below threshold (DG-126: rate 0.02)', () => {
     const learning = makeLearning({
       content: 'test', category: 'testing',
       confidence: { score: 0.3, source: 'INFERRED', evidenceCount: 1, lastReinforced: '', lastReinforcedCycle: 1 },
     });
 
-    // 30 cycles: 10 decay cycles * 0.1 = 1.0 decay → score = max(0, 0.3 - 1.0) = 0
-    const shouldArchive = applyDecayToLearning(learning, 31);
+    // Cycle 36: 15 decay cycles * 0.02 = 0.30 decay → score = max(0, 0.3 - 0.30) = 0
+    const shouldArchive = applyDecayToLearning(learning, 36);
     expect(shouldArchive).toBe(true);
     expect(learning.confidence.score).toBe(0);
   });

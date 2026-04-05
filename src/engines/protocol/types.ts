@@ -62,6 +62,7 @@ export interface SystemPromptContext {
   readonly bitacoraHistory: string;
   readonly userLanguage?: string;
   readonly modelId: string;
+  readonly previousCycleContext?: string;  // DG-126 Phase 2A: from CycleContextManager
 }
 
 // ─── Prompt Wrapping ────────────────────────────────────────────

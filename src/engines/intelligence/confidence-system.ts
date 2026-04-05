@@ -24,11 +24,10 @@ export function getInitialScore(source: ConfidenceSource): number {
  */
 export function reinforce(
   learning: LearningEntry,
-  source: ConfidenceSource,
+  _source: ConfidenceSource,
   currentCycle: number,
 ): void {
-  const increment = REINFORCEMENT_INCREMENT[source];
-  learning.confidence.score = Math.min(1.0, learning.confidence.score + increment);
+  learning.confidence.score = Math.min(1.0, learning.confidence.score + REINFORCEMENT_INCREMENT);
   learning.confidence.evidenceCount += 1;
   learning.confidence.lastReinforced = new Date().toISOString();
   learning.confidence.lastReinforcedCycle = currentCycle;
@@ -96,7 +95,7 @@ export function findSimilarLearning(
     if (learning.category === category) {
       const existingWords = new Set(tokenize(learning.content));
       const similarity = jaccardSimilarity(newWords, existingWords);
-      if (similarity > 0.35) {
+      if (similarity > 0.40) {  // aligned to VSC_EXTENSION (DG-126)
         return learning;
       }
     }

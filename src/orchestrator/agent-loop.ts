@@ -14,6 +14,7 @@ import type { IGuidanceEngine } from '../engines/guidance/types.js';
 import type { IProtocolEngine } from '../engines/protocol/types.js';
 import type { ToolExecutor } from '../tools/tool-executor.js';
 import { GRADUATED_ENFORCEMENT, getEnforcementLevelForCycle } from '../engines/enforcement/constants.js';
+import { CycleContextManager } from '../engines/intelligence/cycle-context-manager.js';
 import type { OrchestrationRequest, SSEEvent } from './types.js';
 
 export interface AgentLoopConfig {
@@ -29,6 +30,8 @@ const DEFAULT_CONFIG: AgentLoopConfig = {
 export class AgentLoopService {
   private readonly config: AgentLoopConfig;
 
+  private readonly cycleContextManager: CycleContextManager;
+
   constructor(
     private readonly protocolEngine: IProtocolEngine,
     private readonly intelligenceEngine: IIntelligenceEngine,
@@ -37,9 +40,11 @@ export class AgentLoopService {
     private readonly guidanceEngine: IGuidanceEngine,
     private readonly llmProvider: ILLMProvider,
     private readonly toolExecutor?: ToolExecutor,
+    cycleContextManager?: CycleContextManager,
     config?: Partial<AgentLoopConfig>,
   ) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.cycleContextManager = cycleContextManager ?? new CycleContextManager();
   }
 
   /**
@@ -92,6 +97,7 @@ export class AgentLoopService {
         bitacoraHistory,
         userLanguage: 'es',
         modelId: request.provider.model,
+        previousCycleContext: this.cycleContextManager.getCycleContextForPrompt(),
       });
 
       // ── STEP 4: Wrap user prompt with enforcement markers ──
@@ -289,6 +295,20 @@ export class AgentLoopService {
       } catch {
         // Guidance is non-critical
       }
+
+      // ── STEP 10: Capture cycle context for next cycle (DG-126 Phase 2A) ──
+      this.cycleContextManager.captureCycleState({
+        cycle: hadProviderError || enforcementGradeF ? tentativeCycle : cycle,
+        timestamp: new Date().toISOString(),
+        requirementSummary: request.prompt,
+        responseSummary: fullResponse,
+        decisionGate: undefined,
+        enforcement: {
+          score: validationResult.score,
+          grade: validationResult.grade,
+          violations: validationResult.violations.length,
+        },
+      });
 
       // ── DONE ──
       yield {

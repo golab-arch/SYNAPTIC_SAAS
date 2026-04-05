@@ -101,7 +101,11 @@ export async function bootstrap(config: AppConfig): Promise<AppInstance> {
   const defaultWorkspace = await workspaceManager.getWorkspace('default', 'default');
   const toolExecutor = new ToolExecutor(defaultWorkspace);
 
-  // 6. Orchestrator
+  // 6. Cycle context manager (singleton, persists across cycles in a session)
+  const { CycleContextManager } = await import('./engines/intelligence/cycle-context-manager.js');
+  const cycleContextManager = new CycleContextManager();
+
+  // 7. Orchestrator
   const agentLoop = new AgentLoopService(
     protocolEngine,
     intelligenceEngine,
@@ -110,6 +114,7 @@ export async function bootstrap(config: AppConfig): Promise<AppInstance> {
     guidanceEngine,
     llmProvider,
     toolExecutor,
+    cycleContextManager,
   );
 
   // 6. Server

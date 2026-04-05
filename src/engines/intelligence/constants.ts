@@ -7,19 +7,15 @@ import type { ConfidenceSource, ContradictionCategory } from './types.js';
 
 // ─── Confidence System Parameters ───────────────────────────────
 
-/** Initial confidence score by source */
+/** Initial confidence score by source — aligned to VSC_EXTENSION battle-tested values (DG-126) */
 export const INITIAL_CONFIDENCE: Record<ConfidenceSource, number> = {
-  EXPLICIT: 0.9,
-  REPEATED: 0.7,
-  INFERRED: 0.3,
+  EXPLICIT: 0.6,    // was 0.9 — new learnings shouldn't look "certain" immediately
+  REPEATED: 0.8,    // was 0.7
+  INFERRED: 0.4,    // was 0.3 — prevents premature archival
 };
 
-/** Reinforcement increment per re-observation */
-export const REINFORCEMENT_INCREMENT: Record<ConfidenceSource, number> = {
-  EXPLICIT: 0.05,
-  REPEATED: 0.10,
-  INFERRED: 0.15,
-};
+/** Reinforcement increment per re-observation — flat 0.15, VSC proved per-source is unnecessary */
+export const REINFORCEMENT_INCREMENT = 0.15;
 
 /** Auto-promotion: INFERRED with 3+ observations and score >= 0.7 → REPEATED */
 export const AUTO_PROMOTION_THRESHOLD = {
@@ -27,11 +23,11 @@ export const AUTO_PROMOTION_THRESHOLD = {
   minScore: 0.7,
 };
 
-/** Temporal decay parameters */
+/** Temporal decay parameters — aligned to VSC_EXTENSION (DG-126) */
 export const DECAY_CONFIG = {
-  gracePeriod: 20,      // Cycles without reinforcement before decay starts
-  decayRate: 0.1,       // Score decrease per cycle after grace period
-  archiveThreshold: 0.2, // Below this score → learning is archived
+  gracePeriod: 20,       // Cycles without reinforcement before decay starts
+  decayRate: 0.02,       // was 0.1 — CRITICAL FIX: 5x less aggressive (20 cycles to archive vs 4)
+  archiveThreshold: 0.2,
 };
 
 /** Injection threshold — only learnings above this are injected into prompt */

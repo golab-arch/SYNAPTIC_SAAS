@@ -941,4 +941,52 @@ Estrategia: API dinamica + enriquecimiento con pricing estatico + fallback.
 
 ---
 
+### Session 13 — DG-126 Phase 2A: Confidence Alignment + Cycle Context Manager
+
+**Fecha**: 2026-04-05
+**Fase**: PRODUCTION
+**Tipo**: Feature — Intelligence pipeline foundation
+**Synaptic Strength**: 65%
+
+#### Item 1: Confidence Parameter Alignment
+
+Aligned to VSC_EXTENSION battle-tested values (v0.5.1, hundreds of cycles):
+
+| Parameter | SAAS antes | VSC (probado) | Impacto |
+|-----------|-----------|---------------|---------|
+| EXPLICIT initial | 0.9 | **0.6** | Learnings nuevos ya no parecen "ciertos" inmediatamente |
+| INFERRED initial | 0.3 | **0.4** | Evita archivado prematuro |
+| REPEATED initial | 0.7 | **0.8** | Alineado |
+| Reinforcement | 0.05/0.10/0.15 por fuente | **0.15 flat** | Simplificado — VSC probo que flat es suficiente |
+| Decay rate | **0.1**/ciclo | **0.02**/ciclo | **CRITICO: 5x menos agresivo** (20 ciclos para archivar vs 4) |
+| Jaccard threshold | 0.35 | **0.40** | Dedup menos permisivo |
+
+#### Item 2: Cycle Context Manager
+
+Ring buffer de 5 snapshots que se inyecta en system prompt:
+- `CycleContextManager` (nuevo): captura requirement, response, decision gate, enforcement
+- Inyectado como "PREVIOUS CYCLE CONTEXT" entre Intelligence y Bitacora en system prompt
+- Permite al LLM tener continuidad entre ciclos (sabe que se hizo en el ciclo anterior)
+- `peekNextCycle()` + `captureCycleState()` integrados en agent-loop.ts
+
+#### Archivos
+
+| Archivo | Cambio |
+|---------|--------|
+| `intelligence/constants.ts` | Valores alineados a VSC |
+| `intelligence/confidence-system.ts` | Flat increment + Jaccard 0.40 |
+| `intelligence/cycle-context-manager.ts` | NUEVO: ring buffer + prompt formatter |
+| `orchestrator/agent-loop.ts` | Inject CCM, capture snapshot en Step 10 |
+| `protocol/types.ts` | + previousCycleContext en SystemPromptContext |
+| `protocol/prompt-builder.ts` | Section 3.5: cycle context |
+| `bootstrap.ts` | CycleContextManager singleton |
+| `__tests__/intelligence.test.ts` | Valores actualizados |
+
+#### Verificacion
+
+- Backend: typecheck PASS, **126/126 tests PASS**
+- Frontend: typecheck PASS, build PASS
+
+---
+
 *SYNAPTIC Protocol v3.0 STRICT — BITACORA Active*
