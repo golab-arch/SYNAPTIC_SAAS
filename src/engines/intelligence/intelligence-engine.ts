@@ -78,6 +78,17 @@ export class IntelligenceEngine implements IIntelligenceEngine {
     await this.learnings.reinforceLearning(learningId, source, session.currentCycle);
   }
 
+  async updateLearningConfidence(learningId: string, score: number, source?: ConfidenceSource): Promise<boolean> {
+    const all = await this.learnings.getLearnings();
+    const learning = all.find((l) => l.id === learningId);
+    if (!learning) return false;
+    learning.confidence.score = Math.max(0, Math.min(1.0, score));
+    if (source) learning.confidence.source = source;
+    // Use the config.storage directly (same storage instance used by LearningManager)
+    await this.config!.storage.updateLearning('default', 'default', learningId, learning);
+    return true;
+  }
+
   async applyDecay(currentCycle: number): Promise<number> {
     return this.learnings.applyDecay(currentCycle);
   }

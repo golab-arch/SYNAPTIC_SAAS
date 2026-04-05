@@ -249,6 +249,8 @@ export interface IIntelligenceEngine extends IEngine {
   addLearning(learning: LearningEntry): Promise<void>;
   getLearnings(options?: { minConfidence?: number; limit?: number }): Promise<LearningEntry[]>;
   reinforceLearning(learningId: string, source: ConfidenceSource): Promise<void>;
+  /** DG-126 Phase 3B: Direct confidence update (for boost/degrade/forget/restore) */
+  updateLearningConfidence(learningId: string, score: number, source?: ConfidenceSource): Promise<boolean>;
   applyDecay(currentCycle: number): Promise<number>;
   detectContradictions(newLearning: LearningEntry): Promise<Contradiction[]>;
 

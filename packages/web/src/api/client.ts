@@ -37,6 +37,20 @@ export class ApiClient {
   async getGuidance(): Promise<GuidanceResult> { return this.get('/guidance'); }
   async getProgress(): Promise<{ phaseProgress: number }> { return this.get('/guidance/progress'); }
 
+  // DG-126 Phase 3B: Learning actions
+  async boostLearning(learningId: string): Promise<{ ok: boolean }> {
+    return this.post(`/learnings/${learningId}/boost`, {});
+  }
+  async degradeLearning(learningId: string): Promise<{ ok: boolean }> {
+    return this.post(`/learnings/${learningId}/degrade`, {});
+  }
+  async forgetLearning(learningId: string): Promise<{ ok: boolean }> {
+    return this.post(`/learnings/${learningId}/forget`, {});
+  }
+  async restoreLearning(learningId: string): Promise<{ ok: boolean }> {
+    return this.post(`/learnings/${learningId}/restore`, {});
+  }
+
   async validateKey(providerId: string, apiKey: string): Promise<KeyValidationResult> {
     const res = await fetch(`${API_BASE}/api/${this.tenantId}/keys/validate`, {
       method: 'POST',

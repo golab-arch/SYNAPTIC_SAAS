@@ -1097,4 +1097,37 @@ Phase 2A (confidence + CycleContextManager) + Phase 2B (learning pipeline) + Pha
 
 ---
 
+### Session 17 — DG-126 Phase 3B: Visible Intelligence + ContradictionModal
+
+**Fecha**: 2026-04-05
+**Fase**: PRODUCTION
+**Tipo**: Feature — Learning actions + ContradictionModal
+**Synaptic Strength**: 85%
+
+#### Items implementados
+
+| # | Feature | Archivo(s) | LOC |
+|---|---------|-----------|-----|
+| 1 | Backend learning action routes | intelligence.ts + intelligence-engine.ts + types.ts | ~50 |
+| 2 | Frontend API client methods | client.ts | ~20 |
+| 3 | LearningsViewer with actions | LearningsViewer.tsx (rewrite) | ~130 |
+| 4 | ContradictionModal | NEW ContradictionModal.tsx | ~120 |
+
+#### Detalles
+
+- **Backend**: POST boost/degrade/forget/restore routes + `updateLearningConfidence()` method
+- **LearningsViewer**: confidence bars, Boost/Degrade/Forget/Restore buttons, archived section with Restore
+- **ContradictionModal**: side-by-side comparison, Keep Old / Keep New / Keep Both resolution, severity badges
+
+#### DG-126 Phase 3 COMPLETE
+
+Phase 3A (ProviderErrorModal + Markdown + ActivityLog) + Phase 3B (LearningsViewer + ContradictionModal) = Frontend migration complete.
+
+#### Verificacion
+
+- Backend: typecheck PASS, **126/126 tests PASS**
+- Frontend: typecheck PASS, build PASS
+
+---
+
 *SYNAPTIC Protocol v3.0 STRICT — BITACORA Active*

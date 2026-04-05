@@ -54,6 +54,36 @@ export async function intelligenceRoutes(
     return { ok: true, gateId: body.gateId, selectedOption: body.selectedOption };
   });
 
+  // ── DG-126 Phase 3B: Learning action endpoints ──
+
+  server.post('/api/:tenantId/:projectId/learnings/:learningId/boost', async (request: FastifyRequest) => {
+    const { learningId } = request.params as TenantParams & { learningId: string };
+    await engine.reinforceLearning(learningId, 'EXPLICIT');
+    return { ok: true, action: 'boost', learningId };
+  });
+
+  server.post('/api/:tenantId/:projectId/learnings/:learningId/degrade', async (request: FastifyRequest) => {
+    const { learningId } = request.params as TenantParams & { learningId: string };
+    const learnings = await engine.getLearnings();
+    const learning = learnings.find((l) => l.id === learningId);
+    if (!learning) return { ok: false, error: 'Learning not found' };
+    const newScore = Math.max(0, learning.confidence.score - 0.15);
+    const ok = await engine.updateLearningConfidence(learningId, newScore);
+    return { ok, action: 'degrade', learningId, newScore };
+  });
+
+  server.post('/api/:tenantId/:projectId/learnings/:learningId/forget', async (request: FastifyRequest) => {
+    const { learningId } = request.params as TenantParams & { learningId: string };
+    const ok = await engine.updateLearningConfidence(learningId, 0);
+    return { ok, action: 'forget', learningId };
+  });
+
+  server.post('/api/:tenantId/:projectId/learnings/:learningId/restore', async (request: FastifyRequest) => {
+    const { learningId } = request.params as TenantParams & { learningId: string };
+    const ok = await engine.updateLearningConfidence(learningId, 0.4, 'EXPLICIT');
+    return { ok, action: 'restore', learningId };
+  });
+
   // Suppress unused params lint — tenantId/projectId will be used for scoping
   void (null as unknown as TenantParams);
 }
