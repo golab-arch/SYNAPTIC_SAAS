@@ -192,6 +192,13 @@ export class AgentLoopService {
         }
       }
 
+      // If LLM produced no text but did use tools, synthesize a minimal response
+      if (fullResponse.length === 0 && toolActions.length > 0) {
+        const toolSummary = toolActions.map((t) => `${t.toolName}: ${t.inputPreview.substring(0, 80)}`).join('\n');
+        fullResponse = `[Agent executed ${toolActions.length} tool(s) but produced no text response]\n\n${toolSummary}`;
+        yield { event: 'message', data: { text: fullResponse } };
+      }
+
       // ── STEP 6: Graduated enforcement validation (DG-126 Item 2) ──
       const enforcementLevel = getEnforcementLevelForCycle(tentativeCycle);
       let validationResult = this.enforcementEngine.validate(fullResponse);
